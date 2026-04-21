@@ -11,14 +11,14 @@ venv/
 # dbt
 dbt/dbt_packages/
 dbt/logs/
-target/
+dbt/target/
 
 # Evidence / Node
 reports/evidence/node_modules/
 reports/evidence/.evidence/
 
 # Data and artifacts
-models/
+/models/
 data/raw/
 data/processed/
 data/submissions/

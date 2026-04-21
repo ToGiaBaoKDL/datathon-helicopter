@@ -1,0 +1,785 @@
+version: 2
+
+models:
+  - name: mart_forecast_daily_base
+    description: |
+      Daily feature mart for forecasting Revenue and COGS.
+      Grain: one row per calendar day.
+      Sources: stg_sales (targets), int_daily_commercial_signals (demand/commercial), int_inventory_monthly_signals (lagged inventory).
+    columns:
+      - name: sales_date
+        description: Calendar date (date part only).
+        tests: [not_null, unique]
+      - name: revenue
+        description: Total daily revenue in VND (all order statuses).
+        tests: [not_null]
+      - name: cogs
+        description: Total daily COGS in VND.
+        tests: [not_null]
+      - name: year
+        description: Calendar year extracted from sales_date.
+      - name: month
+        description: Calendar month (1-12).
+      - name: day_of_week
+        description: Day of week (0=Sun, 6=Sat).
+      - name: is_weekend
+        description: 1 if day_of_week is Sunday or Saturday.
+      - name: order_count
+        description: Count of distinct orders placed.
+      - name: order_line_count
+        description: Count of order lines.
+      - name: units_sold
+        description: Sum of quantities sold across all order lines.
+      - name: line_revenue
+        description: Sum of (quantity * unit_price) across order lines = gross revenue before discounts.
+      - name: line_cogs
+        description: Sum of (quantity * product_cogs) across order lines.
+      - name: total_discount_amount
+        description: Total discount applied across all order lines in VND.
+      - name: avg_line_revenue
+        description: Average line revenue per order line.
+      - name: promo_line_count
+        description: Count of order lines with at least one promotion applied.
+      - name: cancelled_line_count
+        description: Count of order lines tied to cancelled orders.
+      - name: return_record_count
+        description: Count of return records on this day.
+      - name: return_units
+        description: Sum of returned units.
+      - name: refund_amount_total
+        description: Total refund amount in VND.
+      - name: review_count
+        description: Count of customer reviews.
+      - name: avg_rating
+        description: Average star rating (1-5).
+      - name: sessions
+        description: Total web sessions.
+        tests: [not_null]
+      - name: unique_visitors
+        description: Distinct web visitors.
+      - name: page_views
+        description: Total page views.
+      - name: avg_bounce_rate
+        description: Average bounce rate across traffic sources.
+      - name: avg_session_duration_sec
+        description: Average session duration in seconds.
+      - name: lag_1m_stock_on_hand_total
+        description: Prior month-end total stock on hand (inventory lag to avoid leakage).
+        tests: [not_null]
+      - name: lag_1m_units_received_total
+        description: Prior month total units received.
+      - name: lag_1m_units_sold_total
+        description: Prior month total units sold (inventory perspective).
+      - name: lag_1m_avg_stockout_days
+        description: Prior month average stockout days.
+      - name: lag_1m_avg_days_of_supply
+        description: Prior month average days of supply.
+      - name: lag_1m_avg_fill_rate
+        description: Prior month average fill rate.
+      - name: lag_1m_avg_sell_through_rate
+        description: Prior month average sell-through rate.
+      - name: lag_1m_stockout_flag_count
+        description: Prior month count of products with stockout_flag=1.
+      - name: lag_1m_overstock_flag_count
+        description: Prior month count of products with overstock_flag=1.
+      - name: lag_1m_reorder_flag_count
+        description: Prior month count of products with reorder_flag=1.
+
+  - name: mart_submission_scaffold
+    description: Ordered dates and schema required for final submission file.
+    columns:
+      - name: date
+        description: Forecast date.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Placeholder for predicted revenue.
+      - name: cogs
+        description: Placeholder for predicted COGS.
+
+  - name: mart_forecast_daily_modeling
+    description: |
+      Leakage-safe lag and rolling feature table for forecasting models.
+      Grain: one row per calendar day.
+      All lag/rolling features are computed only from historical windows.
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Target variable — total daily revenue in VND.
+      - name: cogs
+        description: Target variable — total daily COGS in VND.
+      - name: year
+        description: Calendar year.
+      - name: month
+        description: Calendar month.
+      - name: quarter
+        description: Calendar quarter (1-4).
+      - name: day_of_week
+        description: Day of week (0=Sun, 6=Sat).
+      - name: is_weekend
+        description: 1 if weekend.
+      - name: day_of_month
+        description: Day of month (1-31).
+      - name: days_to_month_end
+        description: Number of days remaining until month end.
+      - name: is_month_start
+        description: 1 if day is among first 3 days of month.
+      - name: is_month_end
+        description: 1 if day is after the 28th.
+      - name: lag_1d_revenue
+        description: Revenue from 1 day ago.
+      - name: lag_7d_revenue
+        description: Revenue from 7 days ago (weekly seasonality).
+      - name: lag_14d_revenue
+        description: Revenue from 14 days ago.
+      - name: lag_28d_revenue
+        description: Revenue from 28 days ago (monthly seasonality).
+      - name: roll_mean_7d_revenue
+        description: 7-day rolling mean of lag_1d_revenue.
+      - name: roll_mean_28d_revenue
+        description: 28-day rolling mean of lag_1d_revenue.
+      - name: roll_std_7d_revenue
+        description: 7-day rolling sample standard deviation of lag_1d_revenue (volatility).
+      - name: roll_std_28d_revenue
+        description: 28-day rolling sample standard deviation of lag_1d_revenue.
+      - name: lag_1d_cogs
+        description: COGS from 1 day ago.
+      - name: lag_1d_order_count
+        description: Order count from 1 day ago.
+      - name: lag_7d_order_count
+        description: Order count from 7 days ago.
+      - name: lag_1d_units_sold
+        description: Units sold from 1 day ago.
+      - name: lag_7d_units_sold
+        description: Units sold from 7 days ago.
+      - name: lag_1d_total_discount_amount
+        description: Total discount from 1 day ago.
+      - name: lag_1d_promo_line_count
+        description: Promo line count from 1 day ago.
+      - name: lag_1d_cancelled_line_count
+        description: Cancelled line count from 1 day ago.
+      - name: lag_1d_return_record_count
+        description: Return record count from 1 day ago.
+      - name: lag_1d_return_units
+        description: Return units from 1 day ago.
+      - name: lag_1d_sessions
+        description: Web sessions from 1 day ago.
+      - name: lag_7d_sessions
+        description: Web sessions from 7 days ago.
+      - name: lag_1d_unique_visitors
+        description: Unique visitors from 1 day ago.
+      - name: lag_1d_page_views
+        description: Page views from 1 day ago.
+      - name: lag_1d_avg_bounce_rate
+        description: Bounce rate from 1 day ago.
+      - name: lag_1d_avg_session_duration_sec
+        description: Session duration from 1 day ago.
+      - name: roll_mean_7d_sessions
+        description: 7-day rolling mean of lag_1d_sessions.
+      - name: roll_mean_7d_order_count
+        description: 7-day rolling mean of lag_1d_order_count.
+      - name: roll_mean_7d_units_sold
+        description: 7-day rolling mean of lag_1d_units_sold.
+      - name: lag_1m_stock_on_hand_total
+        description: Lagged inventory stock on hand (1 month).
+        tests: [not_null]
+      - name: lag_1m_units_received_total
+        description: Lagged units received (1 month).
+      - name: lag_1m_units_sold_total
+        description: Lagged units sold (1 month).
+      - name: lag_1m_avg_stockout_days
+        description: Lagged avg stockout days (1 month).
+      - name: lag_1m_avg_days_of_supply
+        description: Lagged avg days of supply (1 month).
+      - name: lag_1m_avg_fill_rate
+        description: Lagged avg fill rate (1 month).
+      - name: lag_1m_avg_sell_through_rate
+        description: Lagged avg sell-through rate (1 month).
+      - name: lag_1m_stockout_flag_count
+        description: Lagged stockout product count (1 month).
+      - name: lag_1m_overstock_flag_count
+        description: Lagged overstock product count (1 month).
+      - name: lag_1m_reorder_flag_count
+        description: Lagged reorder product count (1 month).
+
+  - name: mart_daily_fulfillment_kpis
+    description: Daily shipping and delivery KPIs for operations monitoring.
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null, unique]
+      - name: shipped_order_count
+        description: Count of orders with shipment records.
+        tests: [not_null]
+      - name: avg_days_to_ship
+        description: Average days from order to ship_date.
+      - name: avg_days_in_transit
+        description: Average days from ship_date to delivery_date.
+      - name: avg_days_to_deliver
+        description: Average days from order to delivery (end-to-end).
+      - name: free_shipping_order_count
+        description: Count of orders with zero shipping fee.
+      - name: free_shipping_share
+        description: Share of shipped orders with free shipping.
+      - name: avg_shipping_fee
+        description: Average shipping fee in VND.
+      - name: total_shipping_fee
+        description: Total shipping fee in VND.
+
+  - name: mart_daily_inventory_kpis
+    description: Daily inventory health KPIs from operational snapshots.
+    columns:
+      - name: sales_date
+        description: Snapshot date (end-of-month).
+        tests: [not_null, unique]
+      - name: stock_on_hand_total
+        description: Sum of stock_on_hand across all products.
+        tests: [not_null]
+      - name: units_received_total
+        description: Sum of units_received across all products.
+      - name: units_sold_total
+        description: Sum of units_sold across all products.
+      - name: avg_stockout_days
+        description: Average stockout_days per product.
+      - name: avg_days_of_supply
+        description: Average days_of_supply per product.
+      - name: avg_fill_rate
+        description: Average fill_rate per product.
+      - name: avg_sell_through_rate
+        description: Average sell_through_rate per product.
+      - name: stockout_product_count
+        description: Count of products with stockout_flag=1.
+      - name: overstock_product_count
+        description: Count of products with overstock_flag=1.
+      - name: reorder_product_count
+        description: Count of products with reorder_flag=1.
+
+  - name: mart_daily_returns_kpis
+    description: "Daily return-rate and return-reason KPIs for quality monitoring. Grain: order_date cohort."
+    columns:
+      - name: sales_date
+        description: Order date (cohort date).
+        tests: [not_null, unique]
+      - name: order_line_count
+        description: Count of order lines placed on this date.
+      - name: sold_units
+        description: Units sold on this date.
+      - name: return_record_count
+        description: Count of return records for orders placed on this date.
+      - name: return_units
+        description: Units returned for orders placed on this date.
+      - name: refund_amount
+        description: Total refund amount in VND.
+      - name: return_record_rate
+        description: Return records / order lines (by order_date cohort).
+      - name: return_unit_rate
+        description: Returned units / sold units (by order_date cohort).
+      - name: defective_return_count
+        description: Returns with reason = defective.
+      - name: wrong_size_return_count
+        description: Returns with reason = wrong_size.
+      - name: changed_mind_return_count
+        description: Returns with reason = changed_mind.
+      - name: not_as_described_return_count
+        description: Returns with reason = not_as_described.
+      - name: late_delivery_return_count
+        description: Returns with reason = late_delivery.
+
+  - name: mart_daily_marketing_kpis
+    description: Daily traffic and conversion KPIs for acquisition performance.
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null, unique]
+      - name: sessions
+        description: Total web sessions.
+        tests: [not_null]
+      - name: unique_visitors
+        description: Distinct web visitors.
+      - name: page_views
+        description: Total page views.
+      - name: bounce_rate
+        description: Average bounce rate.
+      - name: avg_session_duration_sec
+        description: Average session duration in seconds.
+      - name: order_count
+        description: Count of distinct orders (all statuses).
+      - name: purchasing_customer_count
+        description: Count of distinct customers who placed orders.
+      - name: session_to_order_rate
+        description: Orders / sessions (demand capture efficiency).
+      - name: pages_per_session
+        description: Page views / sessions (engagement depth).
+
+  - name: mart_weekly_business_scorecard
+    description: Weekly business scorecard with growth and margin KPIs.
+    columns:
+      - name: week_start_date
+        description: Start of week (Monday).
+        tests: [not_null, unique]
+      - name: revenue
+        description: Sum of daily revenue for the week.
+        tests: [not_null]
+      - name: cogs
+        description: Sum of daily COGS for the week.
+      - name: gross_profit
+        description: Revenue - COGS.
+      - name: gross_margin_rate
+        description: Gross profit / revenue.
+      - name: order_count
+        description: Sum of daily order counts.
+      - name: sessions
+        description: Sum of daily sessions.
+      - name: session_to_order_rate
+        description: Weekly orders / weekly sessions.
+      - name: return_units
+        description: Sum of daily return units.
+      - name: total_discount_amount
+        description: Sum of daily discount amounts.
+      - name: cancelled_line_count
+        description: Sum of daily cancelled line counts.
+      - name: prev_week_revenue
+        description: Prior week revenue.
+      - name: wow_revenue_growth_rate
+        description: Week-over-week revenue growth rate.
+      - name: prev_week_order_count
+        description: Prior week order count.
+      - name: wow_order_growth_rate
+        description: Week-over-week order growth rate.
+
+  - name: mart_monthly_category_performance
+    description: Monthly category/segment business performance including return and cancellation pressure.
+    columns:
+      - name: month_start_date
+        description: First day of month.
+        tests: [not_null]
+      - name: category
+        description: Product category.
+        tests: [not_null]
+      - name: segment
+        description: Product segment.
+        tests: [not_null]
+      - name: gross_revenue
+        description: Sum of line revenue (before discounts).
+      - name: gross_profit
+        description: Gross revenue - line COGS.
+      - name: gross_margin_rate
+        description: Gross profit / gross revenue.
+      - name: cancelled_revenue_share
+        description: Share of gross revenue tied to cancelled orders.
+      - name: return_unit_rate
+        description: Returned units / sold units.
+
+  - name: mart_weekly_region_performance
+    description: Weekly regional performance for revenue, margin, active customers, and returns.
+    columns:
+      - name: week_start_date
+        description: Start of week (Monday).
+        tests: [not_null]
+      - name: region
+        description: Geographic region.
+        tests: [not_null]
+      - name: gross_revenue
+        description: Sum of line revenue in region.
+      - name: gross_profit
+        description: Gross revenue - line COGS.
+      - name: gross_margin_rate
+        description: Gross profit / gross revenue.
+      - name: active_customer_count
+        description: Distinct customers with orders.
+      - name: order_count
+        description: Distinct orders.
+      - name: return_units
+        description: Sum of returned units.
+      - name: refund_amount
+        description: Sum of refunds in VND.
+
+  - name: mart_daily_executive_kpis
+    description: Daily executive KPI mart for quick cross-functional monitoring. Combines commercial, fulfillment, inventory, returns, and marketing signals.
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Total daily revenue in VND.
+        tests: [not_null]
+      - name: cogs
+        description: Total daily COGS in VND.
+      - name: gross_profit
+        description: Revenue - COGS.
+      - name: gross_margin_rate
+        description: Gross profit / revenue.
+      - name: order_count
+        description: Count of distinct orders.
+      - name: sessions
+        description: Total web sessions.
+      - name: unique_visitors
+        description: Distinct web visitors.
+      - name: page_views
+        description: Total page views.
+      - name: avg_bounce_rate
+        description: Average bounce rate.
+      - name: total_discount_amount
+        description: Total discount in VND.
+      - name: return_units
+        description: Total returned units.
+      - name: cancelled_line_count
+        description: Cancelled order lines.
+      - name: session_to_order_rate
+        description: Orders / sessions.
+      - name: returns_per_order
+        description: Return units / orders.
+      - name: avg_days_to_deliver
+        description: End-to-end delivery time.
+      - name: avg_days_to_ship
+        description: Order-to-ship time.
+      - name: free_shipping_share
+        description: Share of shipped orders with free shipping.
+      - name: avg_shipping_fee
+        description: Average shipping fee in VND.
+      - name: avg_stockout_days
+        description: Average stockout days per product.
+      - name: avg_days_of_supply
+        description: Average days of supply.
+      - name: avg_fill_rate
+        description: Average fill rate.
+      - name: avg_sell_through_rate
+        description: Average sell-through rate.
+      - name: stockout_product_count
+        description: Products with stockout.
+      - name: overstock_product_count
+        description: Products with overstock.
+      - name: reorder_product_count
+        description: Products flagged for reorder.
+      - name: return_record_rate
+        description: Return records / order lines.
+      - name: return_unit_rate
+        description: Returned units / sold units.
+      - name: refund_amount
+        description: Total refunds in VND.
+      - name: late_delivery_return_count
+        description: Returns due to late delivery.
+      - name: defective_return_count
+        description: Returns due to defects.
+      - name: wrong_size_return_count
+        description: Returns due to wrong size.
+      - name: purchasing_customer_count
+        description: Distinct customers ordering.
+      - name: pages_per_session
+        description: Page views / sessions.
+      - name: weekly_revenue
+        description: Weekly rolled-up revenue.
+      - name: weekly_cogs
+        description: Weekly rolled-up COGS.
+      - name: weekly_gross_profit
+        description: Weekly gross profit.
+      - name: weekly_gross_margin_rate
+        description: Weekly gross margin rate.
+      - name: weekly_order_count
+        description: Weekly order count.
+      - name: weekly_sessions
+        description: Weekly sessions.
+      - name: weekly_session_to_order_rate
+        description: Weekly conversion rate.
+      - name: wow_revenue_growth_rate
+        description: Week-over-week revenue growth.
+      - name: wow_order_growth_rate
+        description: Week-over-week order growth.
+      - name: weekly_return_units
+        description: Weekly return units.
+      - name: weekly_total_discount_amount
+        description: Weekly discount amount.
+      - name: weekly_cancelled_line_count
+        description: Weekly cancelled lines.
+
+  - name: mart_daily_risk_flags
+    description: Daily risk alerts derived from executive KPIs for stockout, return spikes, and conversion drops.
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Daily revenue.
+      - name: avg_stockout_days
+        description: Inventory risk metric.
+      - name: return_record_rate
+        description: Quality risk metric.
+      - name: session_to_order_rate
+        description: Demand capture risk metric.
+      - name: stockout_risk_flag
+        description: 1 when avg_stockout_days > p90.
+        tests: [not_null]
+      - name: return_spike_flag
+        description: 1 when return_record_rate > p95.
+        tests: [not_null]
+      - name: conversion_drop_flag
+        description: 1 when session_to_order_rate < p10.
+        tests: [not_null]
+
+  - name: mart_monthly_customer_cohort
+    description: |
+      Monthly cohort retention and value metrics from first-order month.
+      Grain: (cohort_month, months_since_first_order).
+    columns:
+      - name: cohort_month
+        description: First order month of customers in cohort.
+        tests: [not_null]
+      - name: months_since_first_order
+        description: Integer months elapsed since cohort_month.
+        tests: [not_null]
+      - name: cohort_size
+        description: Number of customers who first ordered in cohort_month.
+        tests: [not_null]
+      - name: active_customer_count
+        description: Cohort customers with at least one order this period.
+        tests: [not_null]
+      - name: retention_rate
+        description: Active customers / cohort_size.
+      - name: total_orders
+        description: Total orders placed by cohort in this period.
+      - name: total_revenue
+        description: Total revenue generated by cohort in this period.
+      - name: total_cogs
+        description: Total COGS for cohort orders in this period.
+      - name: gross_profit
+        description: Total revenue - total COGS.
+      - name: avg_order_value
+        description: Average order value (revenue / orders).
+
+  - name: mart_customer_rfm
+    description: |
+      Customer-level RFM-style metrics including recency, frequency, monetary, and inter-order gaps.
+      Grain: customer_id.
+    columns:
+      - name: customer_id
+        description: Unique customer.
+        tests: [not_null, unique]
+      - name: acquisition_channel
+        description: Channel through which customer was acquired.
+      - name: age_group
+        description: Binned age bracket.
+      - name: first_order_date
+        description: Date of customer's first order.
+      - name: last_order_date
+        description: Date of customer's most recent order.
+      - name: total_orders
+        description: Lifetime count of distinct orders.
+        tests: [not_null]
+      - name: total_revenue
+        description: Lifetime net revenue in VND.
+        tests: [not_null]
+      - name: total_cogs
+        description: Lifetime COGS in VND.
+      - name: gross_profit
+        description: Lifetime gross profit.
+      - name: avg_order_value
+        description: Lifetime average order value.
+      - name: recency_days
+        description: Days from last_order_date to max order date in dataset.
+      - name: avg_days_between_orders
+        description: Average gap between consecutive orders.
+
+  - name: mart_promotion_effectiveness
+    description: |
+      Promotion campaign performance summary with revenue, discount, and order metrics.
+      Grain: promo_id.
+    columns:
+      - name: promo_id
+        description: Unique promotion.
+        tests: [not_null, unique]
+      - name: promo_name
+        description: Campaign name.
+      - name: promo_type
+        description: percentage or fixed.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['percentage', 'fixed']
+      - name: discount_value
+        description: Discount amount (percentage points or fixed VND).
+      - name: start_date
+        description: Campaign start.
+      - name: end_date
+        description: Campaign end.
+      - name: applicable_category
+        description: Category restriction if any.
+      - name: promo_channel
+        description: Marketing channel.
+      - name: stackable_flag
+        description: Whether promo can be stacked.
+      - name: min_order_value
+        description: Minimum order value required.
+      - name: total_order_lines
+        description: Count of order lines where promo was applied.
+        tests: [not_null]
+      - name: total_orders
+        description: Count of distinct orders with promo.
+        tests: [not_null]
+      - name: total_units
+        description: Sum of units sold under promo.
+      - name: total_gross_revenue
+        description: Sum of line revenue (before discount).
+      - name: total_net_revenue
+        description: Sum of line net revenue (after discount).
+        tests: [not_null]
+      - name: total_discount_amount
+        description: Sum of discount_amount on promo lines.
+      - name: avg_discount_per_line
+        description: Average discount per line.
+      - name: avg_order_value
+        description: Net revenue / orders.
+      - name: discount_rate
+        description: Total discount / gross revenue.
+
+  - name: mart_product_lifetime_performance
+    description: |
+      Product-level lifetime performance, return, inventory, and lifecycle classification.
+      Grain: product_id.
+    columns:
+      - name: product_id
+        description: Unique product.
+        tests: [not_null, unique]
+      - name: product_name
+        description: Product name.
+      - name: category
+        description: Product category.
+        tests: [not_null]
+      - name: segment
+        description: Product segment.
+      - name: size
+        description: Size variant.
+      - name: color
+        description: Color variant.
+      - name: list_price
+        description: List price in VND.
+        tests: [not_null]
+      - name: unit_cogs
+        description: Unit cost in VND.
+      - name: list_margin_rate
+        description: List-level margin rate.
+      - name: total_orders
+        description: Lifetime count of orders containing this product.
+      - name: total_units_sold
+        description: Lifetime units sold.
+      - name: total_revenue
+        description: Lifetime net revenue.
+      - name: total_cogs
+        description: Lifetime COGS.
+      - name: gross_profit
+        description: Lifetime gross profit.
+      - name: realized_margin_rate
+        description: Actual margin after discounts (gross_profit / total_revenue).
+      - name: first_sale_date
+        description: First day product appeared in orders.
+      - name: last_sale_date
+        description: Most recent day product appeared in orders.
+      - name: active_months
+        description: Count of distinct months with sales.
+      - name: return_units
+        description: Lifetime returned units.
+      - name: return_records
+        description: Lifetime return records.
+      - name: refund_amount
+        description: Lifetime refunds in VND.
+      - name: return_unit_rate
+        description: Return units / units sold.
+      - name: avg_selling_price
+        description: Average selling price after discounts (total_revenue / total_units_sold).
+      - name: avg_sell_through_rate
+        description: Average monthly sell-through rate.
+      - name: total_stockout_days
+        description: Sum of stockout days across all months.
+      - name: stockout_months
+        description: Count of months with stockout_flag=1.
+      - name: overstock_months
+        description: Count of months with overstock_flag=1.
+      - name: reorder_months
+        description: Count of months with reorder_flag=1.
+      - name: months_in_inventory
+        description: Count of months product appears in inventory snapshots.
+      - name: lifecycle_stage
+        description: active, dormant, discontinued, or never_sold.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['active', 'dormant', 'discontinued', 'never_sold']
+      - name: category_revenue_rank
+        description: Rank within category by total_revenue.
+      - name: category_profit_rank
+        description: Rank within category by gross_profit.
+      - name: revenue_share_in_category
+        description: Product revenue / category total revenue.
+
+  - name: mart_monthly_product_health
+    description: |
+      Monthly product-level sales, returns, and inventory health metrics.
+      Grain: (product_id, month_start_date).
+    columns:
+      - name: product_id
+        description: Product natural key.
+        tests: [not_null]
+      - name: month_start_date
+        description: First day of month.
+        tests: [not_null]
+      - name: orders
+        description: Count of distinct orders.
+      - name: units_sold
+        description: Units sold.
+      - name: revenue
+        description: Net revenue in VND.
+      - name: cogs
+        description: COGS in VND.
+      - name: gross_profit
+        description: Revenue - COGS.
+      - name: return_units
+        description: Units returned.
+      - name: return_records
+        description: Count of return records.
+      - name: return_unit_rate
+        description: Return units / units sold.
+      - name: stock_on_hand
+        description: Units in stock at month end.
+      - name: units_received
+        description: Units received during month.
+      - name: inventory_units_sold
+        description: Units sold during month (inventory perspective).
+      - name: stockout_days
+        description: Days out of stock.
+      - name: days_of_supply
+        description: Estimated days of remaining supply.
+      - name: fill_rate
+        description: Order-line fill rate.
+      - name: sell_through_rate
+        description: Ratio of units sold to average inventory.
+      - name: stockout_flag
+        description: 1 = stockout occurred.
+      - name: overstock_flag
+        description: 1 = overstock flagged.
+      - name: reorder_flag
+        description: 1 = reorder recommended.
+
+  - name: mart_part1_mcq_metrics
+    description: Derived metrics backing the MCQ calculations for Part 1.
+    columns:
+      - name: metric_key
+        description: Question identifier (e.g., q1_median_inter_order_gap_days).
+        tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values:
+                  - q1_median_inter_order_gap_days
+                  - q2_top_segment_avg_margin
+                  - q3_top_streetwear_return_reason_count
+                  - q4_lowest_avg_bounce_rate
+                  - q5_promo_line_percentage
+                  - q6_top_age_group_avg_orders_per_customer
+                  - q7_top_region_total_revenue
+                  - q8_top_cancelled_payment_method_count
+                  - q9_highest_return_rate_by_size
+                  - q10_highest_avg_payment_value_by_installments
+      - name: metric_value
+        description: Computed answer value for the MCQ.
+        tests: [not_null]

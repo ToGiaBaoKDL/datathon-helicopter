@@ -1,0 +1,345 @@
+version: 2
+
+models:
+  - name: stg_products
+    description: Product master dimension with list pricing and category attributes.
+    columns:
+      - name: product_id
+        description: Unique product natural key.
+        tests: [not_null, unique]
+      - name: product_name
+        description: Human-readable product name.
+      - name: category
+        description: Product category (e.g., Streetwear, Outdoor, Casual, GenZ).
+        tests: [not_null]
+      - name: segment
+        description: Product segment within category.
+        tests: [not_null]
+      - name: size
+        description: Product size variant.
+      - name: color
+        description: Product color variant.
+      - name: price
+        description: List price in VND before any discounts.
+      - name: cogs
+        description: Unit cost of goods sold in VND.
+      - name: gross_margin_rate
+        description: List-level gross margin rate ((price - cogs) / price).
+
+  - name: stg_customers
+    description: Customer master dimension with demographics and acquisition metadata.
+    columns:
+      - name: customer_id
+        description: Unique customer natural key.
+        tests: [not_null, unique]
+      - name: zip
+        description: Postal code for customer address.
+      - name: city
+        description: City of customer address.
+      - name: signup_date
+        description: Date customer account was created.
+      - name: gender
+        description: Customer gender.
+      - name: age_group
+        description: Binned age bracket (e.g., 18-24, 25-34).
+      - name: acquisition_channel
+        description: Channel through which customer was acquired (e.g., organic_search, social_media).
+
+  - name: stg_geography
+    description: Geography lookup mapping zip codes to city, region, and district.
+    columns:
+      - name: zip
+        description: Postal code natural key.
+        tests: [not_null, unique]
+      - name: city
+        description: City name.
+      - name: region
+        description: Regional grouping (e.g., North, South, Central).
+      - name: district
+        description: District or province name.
+
+  - name: stg_promotions
+    description: Promotion campaign dimension with date boundaries, discount metadata, and eligibility rules.
+    columns:
+      - name: promo_id
+        description: Unique promotion natural key.
+        tests: [not_null, unique]
+      - name: promo_name
+        description: Human-readable campaign name.
+      - name: promo_type
+        description: Discount mechanism — 'percentage' or 'fixed'.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['percentage', 'fixed']
+      - name: discount_value
+        description: Discount amount (percentage points or fixed VND).
+      - name: start_date
+        description: Campaign start date (inclusive).
+      - name: end_date
+        description: Campaign end date (inclusive).
+      - name: applicable_category
+        description: Category restriction if any; null means all categories.
+      - name: promo_channel
+        description: Channel where promo was marketed (e.g., email, social_media, all_channels).
+      - name: stackable_flag
+        description: Whether promo can be stacked with others.
+      - name: min_order_value
+        description: Minimum order value required to apply promo.
+
+  - name: stg_orders
+    description: Cleaned order-level events with status, payment, device, and source attributes.
+    columns:
+      - name: order_id
+        description: Unique order natural key.
+        tests: [not_null, unique]
+      - name: order_date
+        description: Order placement date (date part only).
+      - name: customer_id
+        description: FK to customer who placed the order.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: zip
+        description: Delivery postal code.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_geography')
+                field: zip
+      - name: order_status
+        description: Lifecycle status — created, paid, shipped, delivered, cancelled, returned.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['created', 'paid', 'shipped', 'delivered', 'cancelled', 'returned']
+      - name: payment_method
+        description: Payment instrument used.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['credit_card', 'cod', 'paypal', 'bank_transfer', 'apple_pay']
+      - name: device_type
+        description: Device used to place order (e.g., mobile, desktop, tablet).
+      - name: order_source
+        description: Traffic source attribution for the order (e.g., organic_search, direct).
+
+  - name: stg_order_items
+    description: Cleaned order line events with quantity, unit price, discount, and promotion linkage.
+    columns:
+      - name: order_id
+        description: FK to parent order.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        description: FK to product sold.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: quantity
+        description: Units of product in this line.
+      - name: unit_price
+        description: Selling price per unit before discount in VND.
+      - name: discount_amount
+        description: Discount applied to this line in VND (positive value).
+      - name: promo_id
+        description: Primary promotion applied to this line.
+      - name: promo_id_2
+        description: Secondary stacked promotion if applicable.
+
+  - name: stg_payments
+    description: Payment records with method, value, and installment metadata. Expected 1:1 with orders.
+    columns:
+      - name: order_id
+        description: FK to order. Serves as natural key (1:1 with orders).
+        tests: [not_null, unique]
+      - name: payment_method
+        description: Payment instrument used.
+      - name: payment_value
+        description: Total payment amount in VND.
+      - name: installments
+        description: Number of installment periods chosen.
+
+  - name: stg_shipments
+    description: Shipment-level records tracking ship date, delivery date, and shipping fee.
+    columns:
+      - name: order_id
+        description: FK to order. Serves as natural key (1:1 with shipped orders).
+        tests: [not_null, unique]
+      - name: ship_date
+        description: Date order left warehouse.
+      - name: delivery_date
+        description: Date order reached customer.
+        tests: [not_null]
+      - name: shipping_fee
+        description: Shipping cost charged to customer in VND.
+
+  - name: stg_returns
+    description: Product return records with reason, quantity, and refund amount.
+    columns:
+      - name: return_id
+        description: Unique return natural key.
+        tests: [not_null, unique]
+      - name: order_id
+        description: FK to original order.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        description: FK to returned product.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: return_date
+        description: Date return was processed.
+      - name: return_reason
+        description: Coded reason — defective, wrong_size, changed_mind, not_as_described, late_delivery.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['defective', 'wrong_size', 'changed_mind', 'not_as_described', 'late_delivery']
+      - name: return_quantity
+        description: Number of units returned.
+      - name: refund_amount
+        description: Monetary refund in VND.
+
+  - name: stg_reviews
+    description: Product review events with star rating and review title.
+    columns:
+      - name: review_id
+        description: Unique review natural key.
+        tests: [not_null, unique]
+      - name: order_id
+        description: FK to order being reviewed.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        description: FK to product being reviewed.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: customer_id
+        description: FK to reviewer.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: review_date
+        description: Date review was submitted.
+      - name: rating
+        description: Star rating from 1 (lowest) to 5 (highest).
+        tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+      - name: review_title
+        description: Short review headline.
+
+  - name: stg_sales
+    description: Daily target table for forecasting — contains aggregated daily Revenue and COGS.
+    columns:
+      - name: sales_date
+        description: Calendar date (date part only). Grain = one row per day.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Total daily revenue in VND (all order statuses included).
+        tests: [not_null]
+      - name: cogs
+        description: Total daily COGS in VND.
+        tests:
+          - not_null
+
+  - name: stg_sample_submission
+    description: Competition scaffold dates with expected output schema for final submission.
+    columns:
+      - name: sales_date
+        description: Forecast date to be populated.
+        tests: [not_null, unique]
+      - name: revenue
+        description: Placeholder for predicted revenue.
+      - name: cogs
+        description: Placeholder for predicted COGS.
+
+  - name: stg_inventory
+    description: Monthly inventory snapshots at product level with stock, supply, and flag metrics.
+    columns:
+      - name: snapshot_date
+        description: End-of-month inventory snapshot date.
+        tests: [not_null]
+      - name: product_id
+        description: FK to product.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: stock_on_hand
+        description: Units in stock at snapshot date.
+      - name: units_received
+        description: Units received into warehouse during the month.
+      - name: units_sold
+        description: Units sold during the month (from inventory perspective).
+      - name: stockout_days
+        description: Number of days product was out of stock.
+      - name: days_of_supply
+        description: Estimated days of remaining supply at current sell rate.
+      - name: fill_rate
+        description: Order-line fill rate for the product.
+      - name: stockout_flag
+        description: 1 = product experienced a stockout this month.
+      - name: overstock_flag
+        description: 1 = product was flagged as overstocked this month.
+      - name: reorder_flag
+        description: 1 = product triggered reorder recommendation this month.
+      - name: sell_through_rate
+        description: Ratio of units sold to average inventory during the month.
+      - name: product_name
+        description: Denormalized product name.
+      - name: category
+        description: Denormalized product category.
+      - name: segment
+        description: Denormalized product segment.
+      - name: year
+        description: Calendar year of snapshot.
+      - name: month
+        description: Calendar month of snapshot.
+
+  - name: stg_web_traffic
+    description: Daily web traffic signals by source with sessions, visitors, bounce, and engagement metrics.
+    columns:
+      - name: traffic_date
+        description: Calendar date (date part only).
+        tests: [not_null]
+      - name: traffic_source
+        description: Traffic acquisition source (e.g., organic_search, paid_search, social_media).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['organic_search', 'paid_search', 'social_media', 'email_campaign', 'referral', 'direct']
+      - name: sessions
+        description: Number of web sessions.
+      - name: unique_visitors
+        description: Count of distinct visitors.
+      - name: page_views
+        description: Total page views.
+      - name: bounce_rate
+        description: Share of sessions with single page view.
+      - name: avg_session_duration_sec
+        description: Average session duration in seconds.

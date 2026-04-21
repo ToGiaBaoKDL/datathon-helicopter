@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: int_order_line_enriched
+    description: Order-line grain table enriched with customer, geography, and payment fields.
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: order_date
+        tests: [not_null]
+      - name: line_net_revenue
+        tests: [not_null]
+      - name: line_cogs
+        tests: [not_null]
+
+  - name: int_daily_commercial_signals
+    description: Daily aggregated commercial metrics from transaction tables.
+    columns:
+      - name: sales_date
+        tests: [not_null, unique]
+
+  - name: int_inventory_monthly_signals
+    description: Monthly inventory summaries shifted by one month for leakage-safe joins.
+    columns:
+      - name: month_start_date
+        tests: [not_null, unique]
+      - name: lag_1m_stock_on_hand_total
+      - name: lag_1m_units_sold_total
