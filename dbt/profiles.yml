@@ -1,0 +1,7 @@
+datathon_round1:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DATATHON_WAREHOUSE_PATH', 'warehouse/datathon.duckdb') }}"
+      threads: 4

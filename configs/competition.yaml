@@ -1,0 +1,8 @@
+competition:
+  kaggle_slug: datathon-2026-round-1
+  target_column: revenue
+  secondary_target_column: cogs
+  submission_columns:
+    - Date
+    - Revenue
+    - COGS

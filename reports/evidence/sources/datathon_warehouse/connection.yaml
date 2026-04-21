@@ -1,0 +1,5 @@
+# This file was generated for local DuckDB warehouse access.
+name: datathon_warehouse
+type: duckdb
+options:
+  filename: ../../../../warehouse/datathon.duckdb

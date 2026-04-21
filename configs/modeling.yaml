@@ -1,0 +1,23 @@
+training:
+  random_seed: 2026
+  holdout_ratio: 0.2
+  seasonal_period: 7
+
+cross_validation:
+  strategy: expanding_window
+  n_folds: 5
+  horizon_days: 30
+
+models:
+  lightgbm:
+    n_estimators: 500
+    learning_rate: 0.05
+    num_leaves: 31
+    objective: regression
+    verbose: -1
+  xgboost:
+    n_estimators: 500
+    learning_rate: 0.05
+    max_depth: 6
+    objective: reg:squarederror
+    verbosity: 0

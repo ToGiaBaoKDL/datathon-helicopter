@@ -1,0 +1,43 @@
+tables:
+  - table_name: products
+    candidate_files:
+      - products.csv
+  - table_name: customers
+    candidate_files:
+      - customers.csv
+  - table_name: promotions
+    candidate_files:
+      - promotions.csv
+  - table_name: geography
+    candidate_files:
+      - geography.csv
+  - table_name: orders
+    candidate_files:
+      - orders.csv
+  - table_name: order_items
+    candidate_files:
+      - order_items.csv
+  - table_name: payments
+    candidate_files:
+      - payments.csv
+  - table_name: shipments
+    candidate_files:
+      - shipments.csv
+  - table_name: returns
+    candidate_files:
+      - returns.csv
+  - table_name: reviews
+    candidate_files:
+      - reviews.csv
+  - table_name: sales
+    candidate_files:
+      - sales.csv
+  - table_name: sample_submission
+    candidate_files:
+      - sample_submission.csv
+  - table_name: inventory
+    candidate_files:
+      - inventory.csv
+  - table_name: web_traffic
+    candidate_files:
+      - web_traffic.csv
