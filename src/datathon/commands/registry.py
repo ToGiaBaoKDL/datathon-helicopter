@@ -9,6 +9,7 @@ from datathon.commands import (
     build_raw,
     compare_models,
     download_data,
+    explain,
     export_model_data,
     predict,
     submit_kaggle,
@@ -72,5 +73,11 @@ COMMANDS: dict[str, CommandSpec] = {
         parse_args=compare_models.parse_args,
         run=compare_models.run,
         print_help=compare_models.print_help,
+    ),
+    "explain": CommandSpec(
+        description="Generate SHAP explainability plots for a trained model.",
+        parse_args=explain.parse_args,
+        run=explain.run,
+        print_help=explain.print_help,
     ),
 }

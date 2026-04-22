@@ -25,9 +25,6 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     rmse = float(np.sqrt(np.mean(errors**2)))
 
     denominator = np.sum((y_true - np.mean(y_true)) ** 2)
-    if denominator == 0:
-        r2 = 0.0
-    else:
-        r2 = float(1.0 - (np.sum(errors**2) / denominator))
+    r2 = 0.0 if denominator == 0 else float(1.0 - (np.sum(errors**2) / denominator))
 
     return {"mae": mae, "rmse": rmse, "r2": r2}

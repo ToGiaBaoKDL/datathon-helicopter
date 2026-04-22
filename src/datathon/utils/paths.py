@@ -27,5 +27,9 @@ def models_dir() -> Path:
     return project_root() / "models"
 
 
+def reports_dir() -> Path:
+    return project_root() / "reports"
+
+
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)

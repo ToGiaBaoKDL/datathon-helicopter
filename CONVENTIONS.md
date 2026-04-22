@@ -49,6 +49,26 @@ Examples:
 - Static artifacts and exam docs: `assets/`
 - Exploratory notebooks: `notebooks/`
 
+## Notebook Naming
+
+Use an optional zero-padded order prefix plus lowercase snake_case:
+
+```
+notebooks/
+  01_eda_revenue_drivers.ipynb
+  02_shap_explainability.ipynb
+  03_hyperparameter_tuning.ipynb
+```
+
+- Omit the prefix for one-off or unordered notebooks.
+- Keep names descriptive: `<topic>_<purpose>.ipynb`.
+
+## Visualisation
+
+- Prefer **seaborn** for all statistical and exploratory plots.
+- Use `sns.set_theme()` to apply consistent styling instead of raw matplotlib globals.
+- Keep matplotlib only for library-generated plots (e.g. SHAP) or fine-grained tweaks.
+
 ## Warehouse Schema Layers
 
 Use warehouse schemas aligned with transformation stages:
