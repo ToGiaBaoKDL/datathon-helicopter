@@ -15,6 +15,7 @@ from datathon.commands import (
     predict,
     submit_kaggle,
     train,
+    tune,
 )
 
 
@@ -86,5 +87,11 @@ COMMANDS: dict[str, CommandSpec] = {
         parse_args=ensemble.parse_args,
         run=ensemble.run,
         print_help=ensemble.print_help,
+    ),
+    "tune": CommandSpec(
+        description="Run Optuna hyperparameter search for a single model type.",
+        parse_args=tune.parse_args,
+        run=tune.run,
+        print_help=tune.print_help,
     ),
 }

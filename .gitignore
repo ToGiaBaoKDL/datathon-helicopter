@@ -30,6 +30,9 @@ warehouse/*.duckdb
 warehouse/*.wal
 !warehouse/.gitkeep
 
+# Optuna tuning studies
+optuna_studies/
+
 # Environment
 .env
 
@@ -38,6 +41,9 @@ warehouse/*.wal
 
 # Jupyter
 notebooks/.ipynb_checkpoints/
+
+# SHAP plots (auto-generated)
+reports/shap/
 
 # CatBoost
 /catboost_info/

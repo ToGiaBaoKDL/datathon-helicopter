@@ -31,5 +31,9 @@ def reports_dir() -> Path:
     return project_root() / "reports"
 
 
+def configs_dir() -> Path:
+    return project_root() / "configs"
+
+
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)

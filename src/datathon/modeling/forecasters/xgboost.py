@@ -14,10 +14,26 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
     def __init__(self, **xgb_kwargs) -> None:
         self.model_rev: xgb.XGBRegressor | None = None
         self.model_cogs: xgb.XGBRegressor | None = None
+        self._early_stopping_rounds = xgb_kwargs.pop("early_stopping_rounds", 50)
         self._xgb_kwargs = xgb_kwargs
 
-    def fit(self, X, y_rev, y_cogs) -> None:
-        self.model_rev = xgb.XGBRegressor(**self._xgb_kwargs)
-        self.model_cogs = xgb.XGBRegressor(**self._xgb_kwargs)
-        self.model_rev.fit(X, y_rev)
-        self.model_cogs.fit(X, y_cogs)
+    def fit(self, X, y_rev, y_cogs, eval_set=None):
+        rev_kwargs = dict(self._xgb_kwargs)
+        cogs_kwargs = dict(self._xgb_kwargs)
+
+        if eval_set is not None:
+            X_val, y_rev_val, y_cogs_val = eval_set
+            callback = xgb.callback.EarlyStopping(rounds=self._early_stopping_rounds)
+            rev_kwargs["callbacks"] = [callback]
+            cogs_kwargs["callbacks"] = [callback]
+            fit_rev = {"eval_set": [(X_val, y_rev_val)], "verbose": False}
+            fit_cogs = {"eval_set": [(X_val, y_cogs_val)], "verbose": False}
+        else:
+            fit_rev = {}
+            fit_cogs = {}
+
+        self.model_rev = xgb.XGBRegressor(**rev_kwargs)
+        self.model_cogs = xgb.XGBRegressor(**cogs_kwargs)
+
+        self.model_rev.fit(X, y_rev, **fit_rev)
+        self.model_cogs.fit(X, y_cogs, **fit_cogs)

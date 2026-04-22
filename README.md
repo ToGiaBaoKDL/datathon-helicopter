@@ -2,7 +2,7 @@
 
 End-to-end analytics and forecasting pipeline for daily revenue and COGS.
 
-**Stack:** uv · dbt + DuckDB · Evidence · Rich CLI · LightGBM · XGBoost · Seaborn
+**Stack:** uv · dbt + DuckDB · Evidence · Rich CLI · LightGBM · XGBoost · CatBoost · Seaborn
 
 ---
 
@@ -40,8 +40,9 @@ uv run datathon build-raw --strict
 # 4. Run dbt pipeline
 uv run dbt build --project-dir dbt --profiles-dir dbt
 
-# 5. Train, compare models, and generate submission
-uv run datathon compare-models --n-folds 3 --horizon-days 30
+# 5. Tune, compare models, and generate submission
+uv run datathon tune --model-type catboost --n-trials 30 --patience 5
+uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
 uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.csv
 ```
 
@@ -50,7 +51,9 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 ## Project Structure
 
 ```
-├── configs/                  # YAML configs (competition, modeling, raw tables)
+├── configs/                  # YAML configs
+│   ├── modeling.yaml         # Base config (source of truth)
+│   └── tuned/                # Delta configs from Optuna tuning
 ├── dbt/
 │   ├── models/
 │   │   ├── staging/          # Source-aligned cleaned views
@@ -58,15 +61,14 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 │   │   └── marts/            # Business-domain marts (finance, operations,
 │   │                         #   marketing, customer, product, executive)
 │   └── tests/                # Custom dbt tests
-├── notebooks/                # Exploratory notebooks (numbered prefix convention)
-│   └── 01_shap_explainability.ipynb
+├── notebooks/                # Exploratory notebooks
 ├── reports/
 │   ├── evidence/             # Evidence.dev analytics site
 │   └── shap/                 # SHAP plots output (auto-generated)
 ├── src/datathon/
 │   ├── cli.py                # Entry point
 │   ├── commands/             # CLI commands (rich output)
-│   ├── modeling/             # Forecasters, CV, trainer, SHAP explainer
+│   ├── modeling/             # Forecasters, CV, trainer, tuner, SHAP explainer
 │   └── utils/                # Config, data loaders, DuckDB I/O
 ├── tests/                    # pytest suite
 ├── Makefile                  # Common tasks
@@ -80,15 +82,44 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 | Command | Purpose |
 |---|---|
 | `datathon build-raw --strict` | Load CSVs into DuckDB raw schema |
+| `datathon tune --model-type catboost --n-trials 30 --patience 5` | Optuna hyperparameter search with early stopping |
 | `datathon train --mode evaluate --model-type lightgbm` | Expanding-window CV vs seasonal naive |
-| `datathon train --mode train-final --model-type lightgbm` | Train final model & save artifacts |
-| `datathon predict --model-type lightgbm` | Generate submission from saved model |
-| `datathon compare-models` | CV all registered models, pick winner, train final, submit |
-| `datathon ensemble --model-types lightgbm,xgboost` | Average predictions from trained models |
+| `datathon train --mode train-final --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Train final model with tuned params |
+| `datathon predict --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Generate submission from saved model |
+| `datathon compare-models --config configs/tuned/all_models.yaml` | CV all models + ensemble, pick true winner, submit |
+| `datathon ensemble --model-types lightgbm,xgboost --weights 0.5,0.5` | Weighted ensemble from trained models |
 | `datathon explain --model-type lightgbm` | Generate SHAP summary & bar plots |
 | `datathon baseline --mode evaluate` | Seasonal-naive baseline benchmark |
 | `datathon baseline --mode submit` | Generate naive submission |
 | `datathon submit-kaggle --dry-run --file <path>` | Validate submission schema |
+| `datathon submit-kaggle --file <path> --message "desc"` | Submit to Kaggle |
+
+### Config Management
+
+Base config lives in `configs/modeling.yaml` (source of truth). Tuning writes **delta configs** (only the tuned model's hyperparameters) to `configs/tuned/<model>.yaml`:
+
+```yaml
+# configs/tuned/catboost.yaml
+cogs_target: ratio  # preserved from base
+models:
+  catboost:
+    learning_rate: 0.0789
+    depth: 5
+    ...
+```
+
+Use `--config <path>` to overlay a delta on top of the base config:
+
+```bash
+uv run datathon train --mode train-final --model-type catboost --config configs/tuned/catboost.yaml
+```
+
+Merge multiple deltas into a single file for `compare-models`:
+
+```bash
+# configs/tuned/all_models.yaml contains tuned params for all 3 models
+uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
+```
 
 ---
 
@@ -116,7 +147,7 @@ Any model implementing `BaseForecaster` can be registered:
 ```python
 # src/datathon/modeling/forecasters/my_model.py
 class MyForecaster(BaseForecaster):
-    def fit(self, X, y_rev, y_cogs): ...
+    def fit(self, X, y_rev, y_cogs, eval_set=None): ...
     def predict(self, X) -> (rev_pred, cogs_pred): ...
     def save(self, path): ...
     @classmethod
@@ -128,12 +159,13 @@ FORECASTERS["my_model"] = MyForecaster
 
 ### Registered Models
 
-| Model | Config Location |
+| Model | Config Key |
 |---|---|
-| `lightgbm` | `configs/modeling.yaml` → `models.lightgbm` |
-| `xgboost` | `configs/modeling.yaml` → `models.xgboost` |
+| `lightgbm` | `models.lightgbm` |
+| `xgboost` | `models.xgboost` |
+| `catboost` | `models.catboost` |
 
-Hyperparameters are **injected from YAML** — no hardcode in Python.
+Hyperparameters are **injected from YAML** — no hardcode in Python. Early stopping rounds, n_estimators ceiling, and parallel jobs are defined once in the base config.
 
 ### Recursive Multi-Step Forecast
 
@@ -148,6 +180,12 @@ Fold 1: [train==========|val===]
 Fold 2: [train===============|val===]
 Fold 3: [train======================|val===]
 ```
+
+`compare-models` evaluates every registered model **and** an unweighted ensemble on the same CV folds, then picks the true winner (individual model or ensemble) by lowest total MAE.
+
+### Two-Stage COGS
+
+When `cogs_target: ratio` is set in the config, the COGS model predicts `cogs / revenue` instead of absolute COGS. The ratio is clamped to `[0, 1]` and converted back to absolute values (`revenue * ratio`) during recursive forecast. This leverages the strong revenue-COGS correlation (≈0.976) for more stable predictions.
 
 ---
 
@@ -184,10 +222,9 @@ Pages: executive pulse, risk flags, revenue drivers, fulfillment, inventory, mar
 make install            # uv sync --extra dev
 make build-raw          # datathon build-raw --strict
 make dbt-build          # dbt build
-make train-model        # datathon train --mode train-final --model-type lightgbm
-make predict-model      # datathon predict --model-type lightgbm
-make compare-models     # datathon compare-models --n-folds 2 --horizon-days 30
-make ensemble           # datathon ensemble --model-types lightgbm,xgboost
+make tune-catboost      # datathon tune --model-type catboost --n-trials 30 --patience 5
+make compare-models     # datathon compare-models --config configs/tuned/all_models.yaml
+make ensemble           # datathon ensemble --model-types lightgbm,xgboost,catboost
 make explain            # datathon explain --model-type lightgbm
 make test               # pytest -q
 make lint               # ruff check .
@@ -211,9 +248,11 @@ Saved to `models/<model_type>/`:
 ```
 models/lightgbm/
   forecaster.pkl      # fitted forecaster
-  meta.json           # {model_type, feature_columns}
+  meta.json           # {model_type, feature_columns, cogs_column}
   cv_results.json
 ```
+
+Tuning studies are persisted to `optuna_studies/<model>.db` (SQLite) for resume on interrupt.
 
 ---
 

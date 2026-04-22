@@ -24,6 +24,7 @@ dependencies = [
   "seaborn>=0.13.0",
   "shap>=0.45.0",
   "xgboost>=2.0.0",
+  "optuna>=4.8.0",
 ]
 
 [project.scripts]

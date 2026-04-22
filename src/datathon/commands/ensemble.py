@@ -19,17 +19,32 @@ from datathon.utils.paths import models_dir, submissions_dir, warehouse_path
 class EnsembleOptions:
     warehouse: Path
     model_types: list[str]
+    weights: list[float] | None
     model_dir: Path
     output_path: Path
+    config_path: Path | None
 
 
 def parse_args(raw_args: list[str]) -> EnsembleOptions:
     args = list(raw_args)
     warehouse = Path(take_option(args, "--warehouse", default=str(warehouse_path())))
-    model_types_raw = take_option(args, "--model-types", default="lightgbm,xgboost")
+    model_types_raw = take_option(args, "--model-types", default="lightgbm,xgboost,catboost")
     model_types = [t.strip() for t in model_types_raw.split(",") if t.strip()]
     if len(model_types) < 2:
         raise CommandError("--model-types must contain at least 2 comma-separated model types.")
+
+    weights_raw = take_option(args, "--weights", default="")
+    weights: list[float] | None = None
+    if weights_raw:
+        try:
+            weights = [float(w.strip()) for w in weights_raw.split(",") if w.strip()]
+        except ValueError as exc:
+            raise CommandError("--weights must be comma-separated floats.") from exc
+        if len(weights) != len(model_types):
+            raise CommandError(
+                f"--weights must have {len(model_types)} values (one per model), "
+                f"got {len(weights)}."
+            )
 
     model_dir = Path(take_option(args, "--model-dir", default=str(models_dir())))
     output_path = Path(
@@ -39,12 +54,17 @@ def parse_args(raw_args: list[str]) -> EnsembleOptions:
             default=str(submissions_dir() / "ensemble_submission.csv"),
         )
     )
+    config_path_raw = take_option(args, "--config", default="")
+    config_path = Path(config_path_raw) if config_path_raw else None
+
     ensure_no_unknown_args(args)
     return EnsembleOptions(
         warehouse=warehouse,
         model_types=model_types,
+        weights=weights,
         model_dir=model_dir,
         output_path=output_path,
+        config_path=config_path,
     )
 
 
@@ -52,11 +72,15 @@ def print_help() -> None:
     console.print("[bold]ensemble[/bold]")
     console.print(
         "[dim]Usage:[/dim] datathon ensemble [--model-types <t1,t2,...>] "
-        "[--warehouse <path>] [--model-dir <path>] [--output-path <path>]"
+        "[--weights <w1,w2,...>] [--warehouse <path>] [--model-dir <path>] "
+        "[--output-path <path>] [--config <path>]"
     )
     console.print(
-        "Load multiple trained models, average their predictions, and generate a submission.\n"
-        "Default models: lightgbm,xgboost"
+        "Load multiple trained models, average their predictions (optionally weighted), "
+        "and generate a submission.\n"
+        "Default models: lightgbm,xgboost,catboost | Default weights: equal\n"
+        "[dim]--config[/dim]   Optional modeling config path "
+        "(defaults to configs/modeling.yaml)."
     )
 
 
@@ -69,6 +93,7 @@ def run(options: EnsembleOptions) -> None:
 
     members: list = []
     feature_cols: list[str] | None = None
+    cogs_is_ratio = False
     for model_type in options.model_types:
         model_path = options.model_dir / model_type
         if not model_path.exists():
@@ -77,10 +102,11 @@ def run(options: EnsembleOptions) -> None:
                 f"Run 'datathon train --mode train-final --model-type {model_type}' first."
             )
 
-        forecaster, cols, loaded_type = Trainer.load_artifacts(model_path)
+        forecaster, cols, loaded_type, cogs_col = Trainer.load_artifacts(model_path)
         members.append(forecaster)
         if feature_cols is None:
             feature_cols = cols
+            cogs_is_ratio = cogs_col == "cogs_ratio"
         elif cols != feature_cols:
             raise CommandError(
                 f"Feature mismatch: {model_type} has {len(cols)} features, "
@@ -88,9 +114,13 @@ def run(options: EnsembleOptions) -> None:
             )
         console.print(f"Loaded [bold]{loaded_type}[/bold] from {model_path}")
 
-    ensemble = EnsembleForecaster(members=members)
+    ensemble = EnsembleForecaster(members=members, weights=options.weights)
+    weight_desc = (
+        "equal" if options.weights is None else ",".join(f"{w:.2f}" for w in options.weights)
+    )
     console.print(
-        f"\nEnsemble of [bold]{len(members)}[/bold] models ready. Generating predictions …"
+        f"\nEnsemble of [bold]{len(members)}[/bold] models ready "
+        f"(weights: {weight_desc}). Generating predictions …"
     )
 
     predictions = recursive_forecast(
@@ -98,6 +128,7 @@ def run(options: EnsembleOptions) -> None:
         history=history,
         scaffold=scaffold,
         feature_cols=feature_cols,
+        cogs_is_ratio=cogs_is_ratio,
     )
 
     expected = submission_columns()

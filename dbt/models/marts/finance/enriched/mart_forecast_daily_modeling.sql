@@ -17,6 +17,13 @@ with base as (
         cos(2 * pi() * month / 12) as month_cos,
         sin(2 * pi() * day_of_week / 7) as day_of_week_sin,
         cos(2 * pi() * day_of_week / 7) as day_of_week_cos,
+        -- Vietnamese public holidays
+        case when month = 4 and day_of_month = 30 then 1 else 0 end as is_reunification_day,
+        case when month = 5 and day_of_month = 1 then 1 else 0 end as is_labor_day,
+        case when month = 9 and day_of_month = 2 then 1 else 0 end as is_national_day,
+        -- Structural break: revenue dropped sharply from 2019
+        case when year >= 2019 then 1 else 0 end as is_decline_era,
+        datediff('day', date '2019-01-01', sales_date) as days_since_2019,
         order_count,
         units_sold,
         total_discount_amount,
@@ -42,6 +49,13 @@ with base as (
     from {{ ref('mart_forecast_daily_base') }}
 ),
 
+ratios as (
+    select
+        *,
+        cast(cogs as double) / nullif(revenue, 0) as cogs_ratio
+    from base
+),
+
 calendar as (
     select
         b.*,
@@ -50,7 +64,7 @@ calendar as (
         case when datediff('day', b.sales_date, t.tet_date) between 1 and 21 then 1 else 0 end as is_pre_tet_rush,
         case when datediff('day', b.sales_date, t.tet_date) between 0 and 6  then 1 else 0 end as is_tet_holiday,
         case when datediff('day', b.sales_date, t.tet_date) between -14 and -7 then 1 else 0 end as is_post_tet
-    from base as b
+    from ratios as b
     left join {{ ref('tet_dates') }} as t
         on b.year = t.year
 ),
@@ -73,6 +87,12 @@ base_with_lags as (
         month_cos,
         day_of_week_sin,
         day_of_week_cos,
+        is_reunification_day,
+        is_labor_day,
+        is_national_day,
+        is_decline_era,
+        days_since_2019,
+        cogs_ratio,
         tet_date,
         days_to_tet,
         is_pre_tet_rush,
@@ -83,6 +103,9 @@ base_with_lags as (
         lag(revenue, 7) over (order by sales_date) as lag_7d_revenue,
         lag(revenue, 14) over (order by sales_date) as lag_14d_revenue,
         lag(revenue, 28) over (order by sales_date) as lag_28d_revenue,
+        -- Extra lags for ratio features (leakage-safe)
+        lag(revenue, 8) over (order by sales_date) as lag_8d_revenue,
+        lag(revenue, 29) over (order by sales_date) as lag_29d_revenue,
 
         lag(cogs, 1) over (order by sales_date) as lag_1d_cogs,
         lag(order_count, 1) over (order by sales_date) as lag_1d_order_count,
@@ -137,11 +160,25 @@ lagged as (
         is_pre_tet_rush,
         is_tet_holiday,
         is_post_tet,
+        is_reunification_day,
+        is_labor_day,
+        is_national_day,
+        is_decline_era,
+        days_since_2019,
+        cogs_ratio,
 
         lag_1d_revenue,
         lag_7d_revenue,
         lag_14d_revenue,
         lag_28d_revenue,
+        lag_8d_revenue,
+        lag_29d_revenue,
+
+        -- Revenue growth ratios (historical, leakage-safe)
+        cast(lag_1d_revenue as double) / nullif(lag_8d_revenue, 0) - 1
+            as lag_1d_rev_wow_growth,
+        cast(lag_1d_revenue as double) / nullif(lag_29d_revenue, 0) - 1
+            as lag_1d_rev_mom_growth,
 
         avg(lag_1d_revenue) over (
             order by sales_date rows between 6 preceding and current row
@@ -149,6 +186,13 @@ lagged as (
         avg(lag_1d_revenue) over (
             order by sales_date rows between 27 preceding and current row
         ) as roll_mean_28d_revenue,
+
+        median(lag_1d_revenue) over (
+            order by sales_date rows between 6 preceding and current row
+        ) as roll_median_7d_revenue,
+        median(lag_1d_revenue) over (
+            order by sales_date rows between 27 preceding and current row
+        ) as roll_median_28d_revenue,
 
         stddev_samp(lag_1d_revenue) over (
             order by sales_date rows between 6 preceding and current row

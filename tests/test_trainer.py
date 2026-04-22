@@ -42,6 +42,11 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
             "is_pre_tet_rush": 0,
             "is_tet_holiday": 0,
             "is_post_tet": 0,
+            "is_reunification_day": 0,
+            "is_labor_day": 0,
+            "is_national_day": 0,
+            "is_decline_era": 0,
+            "days_since_2019": (dates - pd.Timestamp("2019-01-01")).days,
             "sessions": rng.integers(100, 1000, size=n),
         }
     )
@@ -142,7 +147,7 @@ def test_trainer_save_and_load_artifacts(forecaster_cls, kwargs, tmp_path) -> No
     model_type_name = forecaster_cls.__name__.lower().replace("forecaster", "")
     Trainer.save_artifacts(model_dir, forecaster_fitted, feature_cols, model_type=model_type_name)
 
-    loaded_forecaster, loaded_features, loaded_type = Trainer.load_artifacts(model_dir)
+    loaded_forecaster, loaded_features, loaded_type, _cogs_col = Trainer.load_artifacts(model_dir)
     assert loaded_features == feature_cols
     X = df[feature_cols].iloc[[-1]]
     assert loaded_forecaster.predict(X)[0][0] == pytest.approx(forecaster_fitted.predict(X)[0][0])

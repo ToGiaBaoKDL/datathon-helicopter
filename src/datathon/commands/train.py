@@ -28,6 +28,7 @@ class TrainOptions:
     model_dir: Path
     n_folds: int
     horizon_days: int
+    config_path: Path | None
 
 
 def parse_args(raw_args: list[str]) -> TrainOptions:
@@ -50,8 +51,11 @@ def parse_args(raw_args: list[str]) -> TrainOptions:
         )
     )
 
-    n_folds = int(take_option(args, "--n-folds", default="5"))
+    n_folds = int(take_option(args, "--n-folds", default="3"))
     horizon_days = int(take_option(args, "--horizon-days", default="30"))
+
+    config_path_raw = take_option(args, "--config", default="")
+    config_path = Path(config_path_raw) if config_path_raw else None
 
     ensure_no_unknown_args(args)
     return TrainOptions(
@@ -61,6 +65,7 @@ def parse_args(raw_args: list[str]) -> TrainOptions:
         model_dir=model_dir,
         n_folds=n_folds,
         horizon_days=horizon_days,
+        config_path=config_path,
     )
 
 
@@ -69,12 +74,14 @@ def print_help() -> None:
     console.print(
         "[dim]Usage:[/dim] datathon train --mode <evaluate|train-final> "
         "[--model-type <type>] [--warehouse <path>] [--model-dir <path>] "
-        "[--n-folds <int>] [--horizon-days <int>]"
+        "[--n-folds <int>] [--horizon-days <int>] [--config <path>]"
     )
     console.print(
         f"[dim]Available model types:[/dim] {', '.join(list_forecasters())}\n"
         "[dim]evaluate[/dim]   Run expanding-window CV and print metrics.\n"
-        "[dim]train-final[/dim] Train on full history and save model artifacts."
+        "[dim]train-final[/dim] Train on full history and save model artifacts.\n"
+        "[dim]--config[/dim]   Optional modeling config path "
+        "(defaults to configs/modeling.yaml)."
     )
 
 
@@ -144,10 +151,13 @@ def run(options: TrainOptions) -> None:
     df = load_modeling_data(options.warehouse)
     console.print(f"Loaded [bold]{len(df)}[/bold] rows | Model: [bold]{options.model_type}[/bold]")
 
-    config = load_modeling_config()
+    config = load_modeling_config(options.config_path)
+    cogs_target = config.get("cogs_target", "absolute")
+    cogs_column = "cogs_ratio" if cogs_target == "ratio" else "cogs"
+
     forecaster = build_forecaster(options.model_type, config)
     cv = ExpandingWindowCV(n_folds=options.n_folds, horizon_days=options.horizon_days)
-    trainer = Trainer(forecaster=forecaster, cv=cv)
+    trainer = Trainer(forecaster=forecaster, cv=cv, cogs_column=cogs_column)
 
     if options.mode == "evaluate":
         model_results = trainer.run_cv(df)
@@ -166,5 +176,6 @@ def run(options: TrainOptions) -> None:
             feature_cols=feature_cols,
             model_type=options.model_type,
             cv_results=model_results,
+            cogs_column=cogs_column,
         )
         console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")
