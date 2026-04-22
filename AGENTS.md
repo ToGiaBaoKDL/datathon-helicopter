@@ -68,7 +68,7 @@ Updated pages under `reports/evidence/pages/eda/`:
 - **`mart_weekly_region_performance`**: Fixed bad `group by 1, 2, 11, 12, 13` referencing joined CTE columns. Changed to `max(coalesce(...))` with clean `group by 1, 2`.
 - **`mart_daily_marketing_kpis`**: Removed `order_status not in ('created', 'cancelled')` filter on `order_count` to ensure consistency with `mart_forecast_daily_base`. The mismatch was affecting 3,824/3,833 days (99.8% of days have cancelled orders).
 
-### 8. ML Feature Enrichment (`mart_forecast_daily_modeling`)
+### 8. ML Feature Enrichment (`mart_forecast_daily_features`)
 - **Calendar features** (known in advance, leakage-safe):
   - `quarter`, `day_of_month`, `days_to_month_end`, `is_month_start` (day <= 3), `is_month_end` (day > 28).
   - Business insight: month-end days avg revenue ~7.1M vs ~4.0M other days (salary cycle effect).
@@ -258,7 +258,7 @@ models/lightgbm/
 
 ### 21. SHAP Explainability — CLI + Notebook
 - **`datathon explain` command** (`src/datathon/commands/explain.py`):
-  - Load saved forecaster artifacts (`Trainer.load_artifacts`), sample background distribution from `mart_forecast_daily_modeling`.
+  - Load saved forecaster artifacts (`Trainer.load_artifacts`), sample background distribution from `mart_forecast_daily_features`.
   - Generates **SHAP beeswarm summary** and **bar plots** for both Revenue and COGS models, saved as PNGs under `reports/shap/`.
   - Prints Rich table of top features ranked by mean absolute SHAP value.
   - Options: `--model-type`, `--model-dir`, `--output-dir`, `--sample-size` (default 500), `--max-display` (default 20).
@@ -267,7 +267,7 @@ models/lightgbm/
   - Loads model + data, wraps `shap.Explanation` for `shap.plots.beeswarm` and `shap.plots.bar`, and displays ranked feature tables.
 
 ### 22. Dead Code Removal
-- Removed `src/datathon/features/lag_features.py` and `tests/test_lag_features.py`. All lag/rolling features are now created entirely inside dbt (`mart_forecast_daily_modeling.sql`); the Python feature module was no longer used by the main pipeline.
+- Removed `src/datathon/features/lag_features.py` and `tests/test_lag_features.py`. All lag/rolling features are now created entirely inside dbt (`mart_forecast_daily_features.sql`); the Python feature module was no longer used by the main pipeline.
 
 ### 23. Validation Results
 - `dbt build`: **167 / 167 PASS** (18 table models, 17 view models, 132 data tests).

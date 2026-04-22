@@ -13,13 +13,15 @@ with line_facts as (
 ),
 returns_monthly as (
     select
-        date_trunc('month', r.return_date) as month_start_date,
+        date_trunc('month', o.order_date) as month_start_date,
         p.category,
         p.segment,
         count(*) as return_record_count,
         sum(r.return_quantity) as return_units,
         sum(r.refund_amount) as refund_amount
     from {{ ref('stg_returns') }} as r
+    inner join {{ ref('stg_orders') }} as o
+        on r.order_id = o.order_id
     inner join {{ ref('stg_products') }} as p
         on r.product_id = p.product_id
     group by 1, 2, 3

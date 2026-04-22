@@ -21,11 +21,13 @@ daily_sales as (
 
 daily_returns as (
     select
-        return_date as sales_date,
+        o.order_date as sales_date,
         count(*) as return_record_count,
-        sum(return_quantity) as return_units,
-        sum(refund_amount) as refund_amount_total
-    from {{ ref('stg_returns') }}
+        sum(r.return_quantity) as return_units,
+        sum(r.refund_amount) as refund_amount_total
+    from {{ ref('stg_returns') }} as r
+    inner join {{ ref('stg_orders') }} as o
+        on r.order_id = o.order_id
     group by 1
 ),
 

@@ -12,11 +12,13 @@ with monthly_sales as (
 
 monthly_returns as (
     select
-        product_id,
-        date_trunc('month', return_date) as month_start_date,
-        sum(return_quantity) as return_units,
+        r.product_id,
+        date_trunc('month', o.order_date) as month_start_date,
+        sum(r.return_quantity) as return_units,
         count(*) as return_records
-    from {{ ref('stg_returns') }}
+    from {{ ref('stg_returns') }} as r
+    inner join {{ ref('stg_orders') }} as o
+        on r.order_id = o.order_id
     group by 1, 2
 ),
 

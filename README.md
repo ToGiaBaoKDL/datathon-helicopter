@@ -193,7 +193,7 @@ When `cogs_target: ratio` is set in the config, the COGS model predicts `cogs / 
 
 Marts are organised by business domain:
 
-- **finance** — `mart_forecast_daily_base`, `mart_forecast_daily_modeling`, `mart_submission_scaffold`
+- **finance** — `mart_forecast_daily_base`, `mart_forecast_daily_features`, `mart_submission_scaffold`
 - **operations** — fulfillment, inventory, returns KPIs
 - **marketing** — traffic/conversion, promotion effectiveness
 - **customer** — cohorts, RFM

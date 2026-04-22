@@ -24,7 +24,7 @@ def parse_args(raw_args: list[str]) -> ExportModelDataOptions:
         take_option(
             args,
             "--output-path",
-            default=str(processed_data_dir() / "mart_forecast_daily_modeling.parquet"),
+            default=str(processed_data_dir() / "mart_forecast_daily_features.parquet"),
         )
     )
     ensure_no_unknown_args(args)
@@ -43,7 +43,7 @@ def run(options: ExportModelDataOptions) -> None:
 
     query = """
         select *
-        from marts.mart_forecast_daily_modeling
+        from marts.mart_forecast_daily_features
         order by sales_date
     """
 

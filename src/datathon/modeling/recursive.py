@@ -74,7 +74,7 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
 def _recompute_target_features(df: pd.DataFrame) -> pd.DataFrame:
     """Recompute revenue/COGS lags and rolling statistics.
 
-    Mirrors the SQL window functions in ``mart_forecast_daily_modeling.sql``.
+    Mirrors the SQL window functions in ``mart_forecast_daily_features.sql``.
     """
     df = df.copy()
     df = df.sort_values("sales_date").reset_index(drop=True)

@@ -11,11 +11,11 @@ from datathon.utils.paths import warehouse_path
 
 
 def load_modeling_data(warehouse: Path | None = None) -> pd.DataFrame:
-    """Load ``marts.mart_forecast_daily_modeling`` ordered by date."""
+    """Load ``marts.mart_forecast_daily_features`` ordered by date."""
     wh = warehouse or warehouse_path()
     query = """
         select *
-        from marts.mart_forecast_daily_modeling
+        from marts.mart_forecast_daily_features
         order by sales_date
     """
     with connect(wh) as conn:

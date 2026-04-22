@@ -94,7 +94,7 @@ models:
       - name: cogs
         description: Placeholder for predicted COGS.
 
-  - name: mart_forecast_daily_modeling
+  - name: mart_forecast_daily_features
     description: |
       Leakage-safe lag and rolling feature table for forecasting models.
       Grain: one row per calendar day.
@@ -224,8 +224,11 @@ models:
       - name: total_shipping_fee
         description: Total shipping fee in VND.
 
-  - name: mart_daily_inventory_kpis
-    description: Daily inventory health KPIs from operational snapshots.
+  - name: mart_monthly_inventory_snapshot
+    description: |
+      Monthly inventory snapshot aggregated from operational data.
+      Grain: one row per end-of-month snapshot date.
+      Data is forward-filled to daily grain in mart_daily_executive_kpis.
     columns:
       - name: sales_date
         description: Snapshot date (end-of-month).

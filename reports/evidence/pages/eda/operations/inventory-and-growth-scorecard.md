@@ -7,7 +7,7 @@ title: Inventory and Growth Scorecard
 This page monitors supply health and links it to growth trajectory.
 
 ```sql _date_bounds
-select sales_date from datathon_warehouse.mart_daily_inventory_kpis
+select sales_date from datathon_warehouse.mart_monthly_inventory_snapshot
 ```
 
 <DateRange name=date_range data={_date_bounds} dates=sales_date/>
@@ -25,7 +25,7 @@ select
     stockout_product_count,
     overstock_product_count,
     reorder_product_count
-from datathon_warehouse.mart_daily_inventory_kpis
+from datathon_warehouse.mart_monthly_inventory_snapshot
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 order by sales_date
 ```
@@ -88,7 +88,7 @@ select
     extract(year from sales_date) as year,
     extract(month from sales_date) as month,
     avg(avg_stockout_days) as avg_stockout_days
-from datathon_warehouse.mart_daily_inventory_kpis
+from datathon_warehouse.mart_monthly_inventory_snapshot
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 group by 1, 2
 order by 1, 2

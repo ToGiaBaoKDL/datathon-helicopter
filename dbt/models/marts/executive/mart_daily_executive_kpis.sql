@@ -49,7 +49,7 @@ inventory as (
         stockout_product_count,
         overstock_product_count,
         reorder_product_count
-    from {{ ref('mart_daily_inventory_kpis') }}
+    from {{ ref('mart_monthly_inventory_snapshot') }}
 ),
 returns as (
     select
@@ -99,7 +99,7 @@ joined as (
         d.total_discount_amount,
         d.return_units,
         d.cancelled_line_count,
-        cast(d.order_count as double) / nullif(d.sessions, 0) as session_to_order_rate,
+        m.session_to_order_rate,
         cast(d.return_units as double) / nullif(d.order_count, 0) as returns_per_order,
         f.avg_days_to_deliver,
         f.avg_days_to_ship,

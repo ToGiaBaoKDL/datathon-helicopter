@@ -14,7 +14,7 @@ with line_facts as (
 ),
 returns_weekly as (
     select
-        date_trunc('week', r.return_date) as week_start_date,
+        date_trunc('week', o.order_date) as week_start_date,
         g.region,
         count(*) as return_record_count,
         sum(r.return_quantity) as return_units,
