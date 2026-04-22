@@ -9,6 +9,7 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 ## Navigation
 
 ### Executive
+- [Executive Summary](./eda/executive/executive-summary)
 - [Executive KPI Pulse](./eda/executive/executive-kpi-pulse)
 - [Risk Flags](./eda/executive/risk-flags)
 - [Part 1 MCQ Metrics](./eda/executive/part1-mcq-metrics)

@@ -89,9 +89,47 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
-## Revenue vs COGS
+```sql revenue_trend
+with numbered as (
+    select revenue, row_number() over (order by sales_date) as rn
+    from datathon_warehouse.mart_forecast_daily_base
+    where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+)
+select
+    regr_slope(revenue, rn) as daily_slope,
+    regr_r2(revenue, rn) as r2
+from numbered
+```
 
-Shows top-line scale and margin pressure trend.
+```sql anomaly_days
+select
+    sales_date,
+    revenue,
+    avg(revenue) over () as mean_revenue,
+    stddev_samp(revenue) over () as std_revenue,
+    mean_revenue + 2 * std_revenue as upper_bound,
+    mean_revenue - 2 * std_revenue as lower_bound,
+    case
+        when revenue > mean_revenue + 2 * std_revenue then 'spike'
+        when revenue < mean_revenue - 2 * std_revenue then 'drop'
+        else 'normal'
+    end as anomaly_flag
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
+```sql anomaly_summary
+select * from anomaly_days where anomaly_flag != 'normal' order by sales_date
+```
+
+## Revenue Trend
+
+<Alert status="info">
+Revenue trend slope: <Value data={revenue_trend} column=daily_slope fmt=num0/> VND/day 
+(R² = <Value data={revenue_trend} column=r2 fmt=pct1/>).
+<Value data={revenue_trend} column=r2/> > 0.3 indicates a meaningful directional trend.
+</Alert>
 
 <AreaChart
     data={revenue_cogs_long}
@@ -105,9 +143,21 @@ Shows top-line scale and margin pressure trend.
     yFmt="num0"
 />
 
+## Anomaly Detection
+
+<Alert status="warning">
+Days with revenue beyond ±2σ from the mean are flagged below. 
+Spikes may indicate successful promotions; drops may signal stockouts or traffic issues.
+</Alert>
+
+<DataTable data={anomaly_summary} rows=10 />
+
 ## Traffic and Orders
 
-Tracks demand capture and conversion throughput.
+<Alert status="info">
+Sessions represent demand generation; orders represent captured demand. 
+The gap between the two lines is unconverted traffic — the primary lever for revenue growth.
+</Alert>
 
 <AreaChart
     data={sessions_orders_long}
@@ -123,7 +173,10 @@ Tracks demand capture and conversion throughput.
 
 ## Return Volume
 
-Tracks daily product returns in units.
+<Alert status="info">
+Return volume is a leading indicator of product quality and customer satisfaction. 
+Sustained increases suggest root causes in fulfillment, sizing, or defects.
+</Alert>
 
 <LineChart
     data={returns_long}
@@ -139,7 +192,10 @@ Tracks daily product returns in units.
 
 ## Discount Pressure
 
-Shows promotional spend trend that can erode margin.
+<Alert status="warning">
+Heavy discounting erodes margin. Days with discount > 10% of revenue warrant investigation 
+into whether the lift justifies the margin sacrifice.
+</Alert>
 
 <AreaChart
     data={discounts_long}
@@ -154,6 +210,11 @@ Shows promotional spend trend that can erode margin.
 />
 
 ## Revenue Pattern by Day of Week
+
+<Alert status="positive">
+Weekend revenue is typically higher due to increased browsing time and promotional activity. 
+Use this pattern to optimize ad spend allocation.
+</Alert>
 
 <BarChart
     data={revenue_heatmap_dow}

@@ -331,6 +331,7 @@ models/lightgbm/
 - Source data anomaly: ~30,495 product-months have both `stockout_flag = 1` and `overstock_flag = 1` in raw inventory data. This is preserved in marts for fidelity.
 - 359 sold products have negative `realized_margin_rate` (COGS > net revenue after discounts), reflecting deep promotional discounting.
 - 181 days in 2012 have `sessions = 0` in `mart_forecast_daily_base` (missing early web_traffic data).
+- **Shipment data gaps**: ~80,878 orders (12.5%) lack records in `raw.shipments`. Of these, 59,462 are `cancelled` (expected), but 21,416 are non-cancelled — including 524 `delivered`, 29 `returned`, and 11 `shipped` orders with no shipment trail. This is a raw data referential-integrity gap, not a dbt bug. `mart_daily_fulfillment_kpis` correctly measures only orders with shipment records.
 
 ## Quick Commands
 ```bash
