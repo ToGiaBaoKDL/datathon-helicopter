@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from datathon.modeling.forecasters.base import BaseForecaster
+from datathon.utils.paths import project_root
 
 # Calendar features are always computable from the date.
 CALENDAR_FEATURES = [
@@ -43,6 +44,14 @@ _TARGET_DERIVED = [
 
 
 _META_COLUMNS = {"sales_date", "revenue", "cogs", "tet_date"}
+
+
+def _load_tet_dates() -> pd.Series:
+    """Load full tet date mapping from the dbt seed (covers all years)."""
+    seed_path = project_root() / "dbt" / "seeds" / "tet_dates.csv"
+    df = pd.read_csv(seed_path)
+    df["tet_date"] = pd.to_datetime(df["tet_date"])
+    return df.set_index("year")["tet_date"]
 
 
 def feature_columns(df: pd.DataFrame) -> list[str]:
@@ -97,8 +106,7 @@ def _prepare_future_frame(
     future["day_of_week_sin"] = np.sin(2 * np.pi * future["day_of_week"] / 7)
     future["day_of_week_cos"] = np.cos(2 * np.pi * future["day_of_week"] / 7)
 
-    # Tet features
-    tet_map = history[["year", "tet_date"]].drop_duplicates().set_index("year")["tet_date"]
+    tet_map = _load_tet_dates()
     future["tet_date"] = future["year"].map(tet_map)
     future["days_to_tet"] = (future["tet_date"] - future["sales_date"]).dt.days
     future["is_pre_tet_rush"] = (

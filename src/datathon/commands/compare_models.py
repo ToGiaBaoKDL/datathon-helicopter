@@ -145,25 +145,32 @@ def run(options: CompareOptions) -> None:
     winner, all_results = _run_comparison(df, config, options.n_folds, options.horizon_days)
     _print_summary(all_results, winner)
 
-    # Train final winner
-    winner_dir = options.model_dir / winner
-    console.print(f"\nTraining final [bold]{winner}[/bold] model …")
-    forecaster = build_forecaster(winner, config)
-    trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV())
-    forecaster_fitted, feature_cols = trainer.train_final(df)
-    Trainer.save_artifacts(
-        model_dir=winner_dir,
-        forecaster=forecaster_fitted,
-        feature_cols=feature_cols,
-        model_type=winner,
-        cv_results=all_results[winner],
-    )
-    console.print(f"Artifacts saved to [bold]{winner_dir}[/bold]")
+    console.print("\nTraining final models on full history …")
+    for model_type in all_results:
+        model_dir = options.model_dir / model_type
+        if model_dir.exists():
+            console.print(f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]")
+            continue
+        forecaster = build_forecaster(model_type, config)
+        trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV())
+        forecaster_fitted, feature_cols = trainer.train_final(df)
+        Trainer.save_artifacts(
+            model_dir=model_dir,
+            forecaster=forecaster_fitted,
+            feature_cols=feature_cols,
+            model_type=model_type,
+            cv_results=all_results[model_type],
+        )
+        console.print(f"  [green]{model_type}[/green] saved to {model_dir}")
 
-    # Generate submission
+    # Load winner for best submission
+    winner_dir = options.model_dir / winner
+    winner_fitted, feature_cols, _ = Trainer.load_artifacts(winner_dir)
+
+    # Generate winner submission
     scaffold = load_scaffold(options.warehouse)
     predictions = recursive_forecast(
-        forecaster=forecaster_fitted,
+        forecaster=winner_fitted,
         history=df,
         scaffold=scaffold,
         feature_cols=feature_cols,

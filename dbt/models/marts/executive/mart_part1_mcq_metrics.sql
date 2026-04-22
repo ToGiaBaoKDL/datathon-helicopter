@@ -89,23 +89,34 @@ return_rate_by_size as (
             on r.product_id = p.product_id
         group by 1
     ),
-    order_line_counts as (
+    size_sales as (
         select
             p.size,
-            count(*) as order_line_count
+            sum(oi.quantity) as sold_units
         from {{ ref('stg_order_items') }} as oi
         inner join {{ ref('stg_products') }} as p
             on oi.product_id = p.product_id
         group by 1
     )
     select
-        olc.size,
+        ss.size,
         coalesce(rc.return_count, 0) as return_count,
-        olc.order_line_count,
-        cast(coalesce(rc.return_count, 0) as double) / nullif(olc.order_line_count, 0) as return_rate
-    from order_line_counts as olc
+        coalesce(ru.return_units, 0) as return_units,
+        ss.sold_units,
+        cast(coalesce(rc.return_count, 0) as double) / nullif(ss.sold_units, 0) as return_rate
+    from size_sales as ss
     left join return_counts as rc
-        on olc.size = rc.size
+        on ss.size = rc.size
+    left join (
+        select
+            p.size,
+            sum(r.return_quantity) as return_units
+        from {{ ref('stg_returns') }} as r
+        inner join {{ ref('stg_products') }} as p
+            on r.product_id = p.product_id
+        group by 1
+    ) as ru
+        on ss.size = ru.size
 ),
 
 payment_value_by_installments as (

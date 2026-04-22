@@ -39,9 +39,9 @@ select
         as gross_margin_rate,
     sum(lf.discount_amount) as total_discount_amount,
     sum(case when lf.order_status = 'cancelled' then 1 else 0 end) as cancelled_line_count,
-    max(coalesce(rw.return_record_count, 0)) as return_record_count,
-    max(coalesce(rw.return_units, 0)) as return_units,
-    max(coalesce(rw.refund_amount, 0)) as refund_amount
+    sum(coalesce(rw.return_record_count, 0)) as return_record_count,
+    sum(coalesce(rw.return_units, 0)) as return_units,
+    sum(coalesce(rw.refund_amount, 0)) as refund_amount
 from line_facts as lf
 left join returns_weekly as rw
     on lf.week_start_date = rw.week_start_date

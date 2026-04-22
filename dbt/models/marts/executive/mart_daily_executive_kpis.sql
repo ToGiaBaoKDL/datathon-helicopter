@@ -70,16 +70,6 @@ marketing as (
         pages_per_session
     from {{ ref('mart_daily_marketing_kpis') }}
 ),
-latest_fulfillment as (
-    select
-        sales_date,
-        avg_days_to_deliver,
-        avg_days_to_ship,
-        free_shipping_share,
-        avg_shipping_fee,
-        lead(sales_date, 1) over (order by sales_date) as next_sales_date
-    from fulfillment
-),
 latest_inventory as (
     select
         sales_date,
@@ -92,27 +82,6 @@ latest_inventory as (
         reorder_product_count,
         lead(sales_date, 1) over (order by sales_date) as next_sales_date
     from inventory
-),
-latest_returns as (
-    select
-        sales_date,
-        return_record_rate,
-        return_unit_rate,
-        refund_amount,
-        late_delivery_return_count,
-        defective_return_count,
-        wrong_size_return_count,
-        lead(sales_date, 1) over (order by sales_date) as next_sales_date
-    from returns
-),
-latest_marketing as (
-    select
-        sales_date,
-        purchasing_customer_count,
-        session_to_order_rate,
-        pages_per_session,
-        lead(sales_date, 1) over (order by sales_date) as next_sales_date
-    from marketing
 ),
 joined as (
     select
@@ -132,10 +101,10 @@ joined as (
         d.cancelled_line_count,
         cast(d.order_count as double) / nullif(d.sessions, 0) as session_to_order_rate,
         cast(d.return_units as double) / nullif(d.order_count, 0) as returns_per_order,
-        lf.avg_days_to_deliver,
-        lf.avg_days_to_ship,
-        lf.free_shipping_share,
-        lf.avg_shipping_fee,
+        f.avg_days_to_deliver,
+        f.avg_days_to_ship,
+        f.free_shipping_share,
+        f.avg_shipping_fee,
         li.avg_stockout_days,
         li.avg_days_of_supply,
         li.avg_fill_rate,
@@ -143,27 +112,24 @@ joined as (
         li.stockout_product_count,
         li.overstock_product_count,
         li.reorder_product_count,
-        lr.return_record_rate,
-        lr.return_unit_rate,
-        lr.refund_amount,
-        lr.late_delivery_return_count,
-        lr.defective_return_count,
-        lr.wrong_size_return_count,
-        lm.purchasing_customer_count,
-        lm.pages_per_session
+        r.return_record_rate,
+        r.return_unit_rate,
+        r.refund_amount,
+        r.late_delivery_return_count,
+        r.defective_return_count,
+        r.wrong_size_return_count,
+        m.purchasing_customer_count,
+        m.pages_per_session
     from daily as d
-    left join latest_fulfillment as lf
-        on d.sales_date >= lf.sales_date
-       and (d.sales_date < lf.next_sales_date or lf.next_sales_date is null)
+    left join fulfillment as f
+        on d.sales_date = f.sales_date
     left join latest_inventory as li
         on d.sales_date >= li.sales_date
        and (d.sales_date < li.next_sales_date or li.next_sales_date is null)
-    left join latest_returns as lr
-        on d.sales_date >= lr.sales_date
-       and (d.sales_date < lr.next_sales_date or lr.next_sales_date is null)
-    left join latest_marketing as lm
-        on d.sales_date >= lm.sales_date
-       and (d.sales_date < lm.next_sales_date or lm.next_sales_date is null)
+    left join returns as r
+        on d.sales_date = r.sales_date
+    left join marketing as m
+        on d.sales_date = m.sales_date
 )
 
 select

@@ -37,9 +37,3 @@ models:
         tests: [not_null, unique]
       - name: lag_1m_stock_on_hand_total
       - name: lag_1m_units_sold_total
-
-  - name: int_daily_promotion_signals
-    description: Daily promotion pressure flags derived from active promotions calendar.
-    columns:
-      - name: sales_date
-        tests: [not_null, unique]
