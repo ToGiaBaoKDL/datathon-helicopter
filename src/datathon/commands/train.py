@@ -149,10 +149,13 @@ def run(options: TrainOptions) -> None:
     cv = ExpandingWindowCV(n_folds=options.n_folds, horizon_days=options.horizon_days)
     trainer = Trainer(forecaster=forecaster, cv=cv)
 
-    model_results = trainer.run_cv(df)
-    base_df = load_forecast_base(options.warehouse)
-    naive_results = _evaluate_baseline_on_splits(base_df, options.n_folds, options.horizon_days)
-    _print_comparison(model_results, naive_results, options.model_type)
+    if options.mode == "evaluate":
+        model_results = trainer.run_cv(df)
+        base_df = load_forecast_base(options.warehouse)
+        naive_results = _evaluate_baseline_on_splits(base_df, options.n_folds, options.horizon_days)
+        _print_comparison(model_results, naive_results, options.model_type)
+    else:
+        model_results = None
 
     if options.mode == "train-final":
         console.print("\nTraining final models on full history …")

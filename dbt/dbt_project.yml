@@ -5,6 +5,7 @@ config-version: 2
 profile: datathon_round1
 
 model-paths: ["models"]
+seed-paths: ["seeds"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
 target-path: "target"

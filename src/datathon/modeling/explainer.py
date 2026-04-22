@@ -66,10 +66,9 @@ def explain_forecaster(
             explainer = shap.TreeExplainer(model)
             shap_values = explainer.shap_values(X_bg)
 
-        mean_abs = pd.Series(
-            shap_values.mean(axis=0) if shap_values.ndim == 2 else shap_values[0].mean(axis=0),
-            index=cols,
-        )
+        if isinstance(shap_values, list):
+            shap_values = shap_values[0]
+        mean_abs = pd.Series(shap_values.mean(axis=0), index=cols)
         mean_abs = mean_abs.abs().sort_values(ascending=False).reset_index()
         mean_abs.columns = ["feature", "mean_abs_shap"]
         out[target] = mean_abs

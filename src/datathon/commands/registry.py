@@ -9,6 +9,7 @@ from datathon.commands import (
     build_raw,
     compare_models,
     download_data,
+    ensemble,
     explain,
     export_model_data,
     predict,
@@ -79,5 +80,11 @@ COMMANDS: dict[str, CommandSpec] = {
         parse_args=explain.parse_args,
         run=explain.run,
         print_help=explain.print_help,
+    ),
+    "ensemble": CommandSpec(
+        description="Average predictions from multiple trained models and submit.",
+        parse_args=ensemble.parse_args,
+        run=ensemble.run,
+        print_help=ensemble.print_help,
     ),
 }

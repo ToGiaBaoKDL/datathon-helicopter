@@ -18,7 +18,7 @@ reports/evidence/node_modules/
 reports/evidence/.evidence/
 
 # Data and artifacts
-models/
+/models/
 data/raw/
 data/processed/
 data/submissions/
@@ -38,6 +38,9 @@ warehouse/*.wal
 
 # Jupyter
 notebooks/.ipynb_checkpoints/
+
+# CatBoost
+/catboost_info/
 
 # Build artifacts
 *.egg-info/

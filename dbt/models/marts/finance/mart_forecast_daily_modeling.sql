@@ -13,6 +13,10 @@ with base as (
             as days_to_month_end,
         case when date_part('day', sales_date) <= 3 then 1 else 0 end as is_month_start,
         case when date_part('day', sales_date) > 28 then 1 else 0 end as is_month_end,
+        sin(2 * pi() * month / 12) as month_sin,
+        cos(2 * pi() * month / 12) as month_cos,
+        sin(2 * pi() * day_of_week / 7) as day_of_week_sin,
+        cos(2 * pi() * day_of_week / 7) as day_of_week_cos,
         order_count,
         units_sold,
         total_discount_amount,
@@ -38,6 +42,19 @@ with base as (
     from {{ ref('mart_forecast_daily_base') }}
 ),
 
+calendar as (
+    select
+        b.*,
+        t.tet_date,
+        datediff('day', b.sales_date, t.tet_date) as days_to_tet,
+        case when datediff('day', b.sales_date, t.tet_date) between 1 and 21 then 1 else 0 end as is_pre_tet_rush,
+        case when datediff('day', b.sales_date, t.tet_date) between 0 and 6  then 1 else 0 end as is_tet_holiday,
+        case when datediff('day', b.sales_date, t.tet_date) between -14 and -7 then 1 else 0 end as is_post_tet
+    from base as b
+    left join {{ ref('tet_dates') }} as t
+        on b.year = t.year
+),
+
 base_with_lags as (
     select
         sales_date,
@@ -52,6 +69,15 @@ base_with_lags as (
         days_to_month_end,
         is_month_start,
         is_month_end,
+        month_sin,
+        month_cos,
+        day_of_week_sin,
+        day_of_week_cos,
+        tet_date,
+        days_to_tet,
+        is_pre_tet_rush,
+        is_tet_holiday,
+        is_post_tet,
 
         lag(revenue, 1) over (order by sales_date) as lag_1d_revenue,
         lag(revenue, 7) over (order by sales_date) as lag_7d_revenue,
@@ -85,7 +111,7 @@ base_with_lags as (
         lag_1m_stockout_flag_count,
         lag_1m_overstock_flag_count,
         lag_1m_reorder_flag_count
-    from base
+    from calendar
 ),
 
 lagged as (
@@ -102,6 +128,15 @@ lagged as (
         days_to_month_end,
         is_month_start,
         is_month_end,
+        month_sin,
+        month_cos,
+        day_of_week_sin,
+        day_of_week_cos,
+        tet_date,
+        days_to_tet,
+        is_pre_tet_rush,
+        is_tet_holiday,
+        is_post_tet,
 
         lag_1d_revenue,
         lag_7d_revenue,

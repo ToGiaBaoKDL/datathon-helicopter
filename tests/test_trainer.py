@@ -33,6 +33,15 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
             "days_to_month_end": 1,
             "is_month_start": 0,
             "is_month_end": 0,
+            "month_sin": np.sin(2 * np.pi * dates.month / 12),
+            "month_cos": np.cos(2 * np.pi * dates.month / 12),
+            "day_of_week_sin": np.sin(2 * np.pi * dates.dayofweek / 7),
+            "day_of_week_cos": np.cos(2 * np.pi * dates.dayofweek / 7),
+            "tet_date": pd.Timestamp("2023-01-22"),
+            "days_to_tet": (pd.Timestamp("2023-01-22") - dates).days,
+            "is_pre_tet_rush": 0,
+            "is_tet_holiday": 0,
+            "is_post_tet": 0,
             "sessions": rng.integers(100, 1000, size=n),
         }
     )

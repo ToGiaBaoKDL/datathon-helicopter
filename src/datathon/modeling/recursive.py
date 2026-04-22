@@ -18,6 +18,14 @@ CALENDAR_FEATURES = [
     "days_to_month_end",
     "is_month_start",
     "is_month_end",
+    "month_sin",
+    "month_cos",
+    "day_of_week_sin",
+    "day_of_week_cos",
+    "days_to_tet",
+    "is_pre_tet_rush",
+    "is_tet_holiday",
+    "is_post_tet",
 ]
 
 # Features derived from the target variables (revenue / cogs).
@@ -34,8 +42,11 @@ _TARGET_DERIVED = [
 ]
 
 
+_META_COLUMNS = {"sales_date", "revenue", "cogs", "tet_date"}
+
+
 def feature_columns(df: pd.DataFrame) -> list[str]:
-    return [c for c in df.columns if c not in ("sales_date", "revenue", "cogs")]
+    return [c for c in df.columns if c not in _META_COLUMNS]
 
 
 def _recompute_target_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -81,12 +92,29 @@ def _prepare_future_frame(
     future["is_month_start"] = (future["day_of_month"] <= 3).astype(int)
     future["is_month_end"] = (future["day_of_month"] > 28).astype(int)
 
+    future["month_sin"] = np.sin(2 * np.pi * future["month"] / 12)
+    future["month_cos"] = np.cos(2 * np.pi * future["month"] / 12)
+    future["day_of_week_sin"] = np.sin(2 * np.pi * future["day_of_week"] / 7)
+    future["day_of_week_cos"] = np.cos(2 * np.pi * future["day_of_week"] / 7)
+
+    # Tet features
+    tet_map = history[["year", "tet_date"]].drop_duplicates().set_index("year")["tet_date"]
+    future["tet_date"] = future["year"].map(tet_map)
+    future["days_to_tet"] = (future["tet_date"] - future["sales_date"]).dt.days
+    future["is_pre_tet_rush"] = (
+        (future["days_to_tet"] > 0) & (future["days_to_tet"] <= 21)
+    ).astype(int)
+    future["is_tet_holiday"] = (
+        (future["days_to_tet"] <= 0) & (future["days_to_tet"] >= -6)
+    ).astype(int)
+    future["is_post_tet"] = ((future["days_to_tet"] < -6) & (future["days_to_tet"] >= -14)).astype(
+        int
+    )
+
     exogenous_cols = [
         c
         for c in history.columns
-        if c not in ("sales_date", "revenue", "cogs")
-        and c not in CALENDAR_FEATURES
-        and c not in _TARGET_DERIVED
+        if c not in _META_COLUMNS and c not in CALENDAR_FEATURES and c not in _TARGET_DERIVED
     ]
 
     last_row = history.iloc[[-1]]

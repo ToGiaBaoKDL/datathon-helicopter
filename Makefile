@@ -2,7 +2,7 @@ UV ?= uv
 DBT_PROJECT_DIR ?= dbt
 DBT_PROFILES_DIR ?= dbt
 
-.PHONY: install download-data build-raw dbt-build dbt-test export-model-data evidence-install evidence-sources evidence-dev baseline-metrics baseline-submission submit-kaggle train-model predict-model compare-models explain test lint
+.PHONY: install download-data build-raw dbt-build dbt-test export-model-data evidence-install evidence-sources evidence-dev baseline-metrics baseline-submission submit-kaggle train-model predict-model compare-models ensemble explain test lint
 
 install:
 	$(UV) sync --extra dev
@@ -51,6 +51,9 @@ predict-model:
 
 compare-models:
 	$(UV) run datathon compare-models --n-folds 2 --horizon-days 30
+
+ensemble:
+	$(UV) run datathon ensemble --model-types lightgbm,xgboost
 
 explain:
 	$(UV) run datathon explain --model-type lightgbm

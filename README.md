@@ -53,7 +53,7 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 ├── configs/                  # YAML configs (competition, modeling, raw tables)
 ├── dbt/
 │   ├── models/
-│   │   ├── staging/          # Staging views
+│   │   ├── staging/          # Source-aligned cleaned views
 │   │   ├── intermediate/     # Enriched order lines, inventory signals
 │   │   └── marts/            # Business-domain marts (finance, operations,
 │   │                         #   marketing, customer, product, executive)
@@ -84,6 +84,7 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 | `datathon train --mode train-final --model-type lightgbm` | Train final model & save artifacts |
 | `datathon predict --model-type lightgbm` | Generate submission from saved model |
 | `datathon compare-models` | CV all registered models, pick winner, train final, submit |
+| `datathon ensemble --model-types lightgbm,xgboost` | Average predictions from trained models |
 | `datathon explain --model-type lightgbm` | Generate SHAP summary & bar plots |
 | `datathon baseline --mode evaluate` | Seasonal-naive baseline benchmark |
 | `datathon baseline --mode submit` | Generate naive submission |
@@ -161,7 +162,7 @@ Marts are organised by business domain:
 - **product** — lifetime performance, monthly health, category performance
 - **executive** — daily KPIs, risk flags, scorecards, region performance
 
-Run: `make dbt-build` (167 tests, all passing).
+Run: `make dbt-build` to build models and run tests.
 
 ---
 
@@ -186,6 +187,7 @@ make dbt-build          # dbt build
 make train-model        # datathon train --mode train-final --model-type lightgbm
 make predict-model      # datathon predict --model-type lightgbm
 make compare-models     # datathon compare-models --n-folds 2 --horizon-days 30
+make ensemble           # datathon ensemble --model-types lightgbm,xgboost
 make explain            # datathon explain --model-type lightgbm
 make test               # pytest -q
 make lint               # ruff check .
@@ -196,8 +198,8 @@ make lint               # ruff check .
 ## Tests
 
 ```bash
-make test   # 11 passed
-make lint   # All checks passed
+make test   # run pytest suite
+make lint   # run ruff linter
 ```
 
 ---

@@ -19,7 +19,14 @@ def load_modeling_data(warehouse: Path | None = None) -> pd.DataFrame:
         order by sales_date
     """
     with connect(wh) as conn:
-        return conn.execute(query).fetchdf()
+        df = conn.execute(query).fetchdf()
+
+    for col in df.columns:
+        if col == "sales_date":
+            continue
+        if df[col].dtype.name in ("Int64", "Int32", "Float64", "boolean", "BooleanDtype"):
+            df[col] = df[col].astype(float)
+    return df
 
 
 def load_forecast_base(warehouse: Path | None = None) -> pd.DataFrame:

@@ -53,8 +53,7 @@ models:
       - name: avg_rating
         description: Average star rating (1-5).
       - name: sessions
-        description: Total web sessions.
-        tests: [not_null]
+        description: Total web sessions. May be null for early dates (e.g., 2012) before web_traffic tracking began.
       - name: unique_visitors
         description: Distinct web visitors.
       - name: page_views
@@ -64,8 +63,7 @@ models:
       - name: avg_session_duration_sec
         description: Average session duration in seconds.
       - name: lag_1m_stock_on_hand_total
-        description: Prior month-end total stock on hand (inventory lag to avoid leakage).
-        tests: [not_null]
+        description: Prior month-end total stock on hand (inventory lag to avoid leakage). May be null for months before inventory tracking began.
       - name: lag_1m_units_received_total
         description: Prior month total units received.
       - name: lag_1m_units_sold_total
@@ -182,8 +180,7 @@ models:
       - name: roll_mean_7d_units_sold
         description: 7-day rolling mean of lag_1d_units_sold.
       - name: lag_1m_stock_on_hand_total
-        description: Lagged inventory stock on hand (1 month).
-        tests: [not_null]
+        description: Lagged inventory stock on hand (1 month). May be null for months before inventory tracking began.
       - name: lag_1m_units_received_total
         description: Lagged units received (1 month).
       - name: lag_1m_units_sold_total

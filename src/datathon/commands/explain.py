@@ -87,6 +87,9 @@ def _save_shap_plots(
     """Save beeswarm summary and bar plots for a target."""
     import shap
 
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Summary (beeswarm)

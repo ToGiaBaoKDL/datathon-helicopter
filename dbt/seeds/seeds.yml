@@ -1,0 +1,10 @@
+version: 2
+
+seeds:
+  - name: tet_dates
+    description: Vietnamese Lunar New Year (Tet) dates by Gregorian year.
+    columns:
+      - name: year
+        description: Gregorian year.
+      - name: tet_date
+        description: Gregorian date of Tet Nguyen Dan for that year.
