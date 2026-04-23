@@ -140,6 +140,16 @@ order by 1
 
 ## Promo Type Summary
 
+<Alert status="info">
+Percentage promos (45 campaigns) drive ~5B VND revenue at 12.9% average discount rate. 
+Fixed promos (5 campaigns) drive ~376M VND at only 1.2% rate. Scale vs efficiency trade-off is clear.
+</Alert>
+
+<Alert status="positive">
+Action: Fixed-discount campaigns have 11× higher ROI than percentage discounts. 
+Test expanding fixed-discount promos for high-margin categories where discount depth matters less.
+</Alert>
+
 <BarChart
     data={promo_summary}
     x=promo_type
@@ -162,9 +172,19 @@ order by 1
 
 ## Campaign Timeline
 
+<Alert status="info">
+Campaign-level detail. High-revenue campaigns are not always high-discount — the most efficient promos 
+combine modest discount depth with strong channel reach.
+</Alert>
+
 <DataTable data={promo_timeline} rows=10 />
 
 ## Discount Depth vs Revenue
+
+<Alert status="warning">
+Higher discount rates do not always yield higher revenue. The scatter reveals a "diminishing returns" zone 
+where deep discounts (>20%) fail to lift revenue proportionally — classic margin erosion without volume compensation.
+</Alert>
 
 <ScatterPlot
     data={promo_vs_discount}
@@ -183,6 +203,11 @@ order by 1
 
 ## Channel Breakdown
 
+<Alert status="info">
+Channel performance reveals where promotional dollars work hardest. 
+Email and social typically have lower CAC; paid search and display require tighter ROI thresholds.
+</Alert>
+
 <BarChart
     data={channel_breakdown}
     x=promo_channel
@@ -194,6 +219,11 @@ order by 1
 />
 
 ## Daily Discount Pressure
+
+<Alert status="warning">
+Heavy discounting erodes margin. Days with discount >10% of revenue warrant investigation 
+into whether the lift justifies the margin sacrifice. Sustained high-discount periods suggest weak organic demand.
+</Alert>
 
 <AreaChart
     data={daily_promo_pressure}
@@ -207,6 +237,11 @@ order by 1
 />
 
 ## Discount Pattern by Day of Week
+
+<Alert status="info">
+Discount intensity often follows traffic patterns — deeper discounts on low-conversion days (weekends) 
+may be a misallocation. Shift promotional depth to Wednesday–Thursday when conversion is already highest.
+</Alert>
 
 <BarChart
     data={discount_heatmap_dow}

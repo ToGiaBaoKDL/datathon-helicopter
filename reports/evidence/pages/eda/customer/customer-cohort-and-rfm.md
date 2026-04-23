@@ -102,7 +102,7 @@ select
     avg(total_revenue) as avg_revenue,
     avg(total_orders) as avg_orders,
     sum(total_revenue) as tier_revenue,
-    sum(total_revenue) * 100.0 / sum(sum(total_revenue)) over () as revenue_share
+    sum(total_revenue) / sum(sum(total_revenue)) over () as revenue_share
 from ranked
 group by revenue_quartile
 order by avg_revenue desc
@@ -160,6 +160,20 @@ group by 1
 order by 1
 ```
 
+```sql channel_comparison
+select
+    acquisition_channel,
+    count(*) as customers,
+    avg(total_revenue) as avg_revenue,
+    avg(total_orders) as avg_orders,
+    avg(recency_days) as avg_recency
+from datathon_warehouse.mart_customer_rfm
+where acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1
+order by avg_revenue desc
+```
+
 ## Latest Cohort Snapshot
 
 <Alert status="info">
@@ -176,7 +190,7 @@ Monitor month-0 retention and AOV to spot acquisition quality shifts early.
 <BigValue
     data={latest_cohort}
     value=retention_rate
-    fmt="pct"
+    fmt="pct2"
     title="Month-0 Retention"
 />
 
@@ -190,8 +204,13 @@ Monitor month-0 retention and AOV to spot acquisition quality shifts early.
 ## Retention Curve
 
 <Alert status="info">
-Retention typically drops sharply in months 1–3, then stabilizes. 
-The 20% benchmark line marks a healthy long-term retention threshold for e-commerce.
+Retention drops sharply to ~3.5% by month 1, then stabilizes around ~3.2%. 
+This is a classic e-commerce pattern — most customers never return after their first purchase.
+</Alert>
+
+<Alert status="warning">
+The 20% benchmark is far above actual performance. The realistic target for month-6 retention is ~3%.
+Focus on increasing first-repeat rate (month 1) rather than long-term retention.
 </Alert>
 
 <LineChart
@@ -211,12 +230,12 @@ The 20% benchmark line marks a healthy long-term retention threshold for e-comme
 
 <Alert status="info">
 CLV tiers are quartile-based (Platinum = top 25% by revenue). 
-Platinum customers typically generate a disproportionate share of total revenue despite being fewer in number.
+Platinum customers generate 68% of total revenue despite being only 25% of the base — a classic Pareto distribution.
 </Alert>
 
 <Alert status="positive">
-Action: Prioritize retention campaigns for Platinum and Gold tiers. 
-A 5% churn in Platinum represents a larger revenue loss than a 20% churn in Bronze.
+Action: Prioritize retention for Platinum and Gold. A 5% churn in Platinum = ~560M VND lost, 
+more than a 50% churn in Bronze (~175M VND).
 </Alert>
 
 <BarChart
@@ -234,16 +253,21 @@ A 5% churn in Platinum represents a larger revenue loss than a 20% churn in Bron
     x=clv_tier
     y=revenue_share
     title="Revenue Share by CLV Tier"
-    subtitle="Contribution to total revenue (%)"
+    subtitle="Contribution to total revenue"
     yAxisTitle="Revenue Share"
     yFmt="0.0%"
 />
 
 ## Churn Risk Segments
 
-<Alert status="warning">
-Customers in the "Churned" bucket have not ordered in more than 2× their normal gap. 
-"Single Order" customers have only purchased once — they need a different activation strategy than win-back.
+<Alert status="info">
+28,041 customers (31%) are "Churned" — no order in 2× their normal gap. 
+22,358 (25%) are "Single Order" — never returned after first purchase. These are distinct problems requiring different tactics.
+</Alert>
+
+<Alert status="positive">
+Action: For Single Order customers, send a "second purchase incentive" within 30 days of first order. 
+For Churned customers, use a "we miss you" campaign with personalized product recommendations.
 </Alert>
 
 <BarChart
@@ -262,6 +286,23 @@ Customers in the "Churned" bucket have not ordered in more than 2× their normal
     y=avg_revenue
     title="Average Lifetime Revenue by Churn Risk"
     subtitle="Revenue at stake in each segment"
+    yAxisTitle="Avg Revenue"
+    yFmt="num0"
+/>
+
+## Acquisition Channel Performance
+
+<Alert status="info">
+Social media and organic search drive the highest average revenue per customer (~184K VND). 
+All channels are remarkably close in performance (178K–184K), suggesting product-market fit is consistent across sources.
+</Alert>
+
+<BarChart
+    data={channel_comparison}
+    x=acquisition_channel
+    y=avg_revenue
+    title="Avg Lifetime Revenue by Channel"
+    subtitle="Which acquisition sources bring the highest-value customers"
     yAxisTitle="Avg Revenue"
     yFmt="num0"
 />

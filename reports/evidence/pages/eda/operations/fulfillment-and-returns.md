@@ -102,6 +102,13 @@ group by 1, 2
 order by 1, 2
 ```
 
+## Delivery Performance
+
+<Alert status="info">
+Delivery time has remained remarkably stable at ~6 days across the entire dataset. 
+This is a strength — unlike conversion or revenue, fulfillment reliability has not degraded over time.
+</Alert>
+
 <LineChart
     data={fulfillment_daily}
     x=sales_date
@@ -112,6 +119,18 @@ order by 1, 2
     xAxisTitle="Date"
     yFmt="0"
 />
+
+## Return Rate Trends
+
+<Alert status="warning">
+Return rates fluctuate around 5–6% but periodically spike above the 5% quality threshold. 
+Sustained elevation indicates root-cause issues in product quality, sizing accuracy, or fulfillment damage.
+</Alert>
+
+<Alert status="positive">
+Action: Focus on controllable return reasons — "defective" and "wrong_size" are fixable with supplier QC and sizing guides. 
+"Changed_mind" is behavioral and harder to influence.
+</Alert>
 
 <LineChart
     data={returns_daily}
@@ -139,6 +158,13 @@ order by 1, 2
     <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
 </LineChart>
 
+## Return Root Causes
+
+<Alert status="info">
+Understanding why customers return is the first step to reducing return volume. 
+Defective and wrong-size returns are operational failures; changed-mind returns are market signals.
+</Alert>
+
 <BarChart
     data={returns_reason_summary}
     x=return_reason
@@ -148,6 +174,13 @@ order by 1, 2
     yAxisTitle="Return Count"
     yFmt="num0"
 />
+
+## Return Patterns
+
+<Alert status="info">
+Return rates show both weekly and seasonal rhythms. Identifying high-risk days/months enables 
+proactive quality checks before dispatch.
+</Alert>
 
 <BarChart
     data={returns_heatmap_dow}
@@ -169,6 +202,8 @@ order by 1, 2
     yAxisTitle="Return Rate"
     yFmt="0.0%"
 />
+
+## Daily Detail
 
 <DataTable data={fulfillment_daily} rows=10/>
 <DataTable data={returns_daily} rows=10/>

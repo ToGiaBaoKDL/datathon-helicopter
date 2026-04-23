@@ -94,7 +94,8 @@ select
     sum(stockout_flag) as stockout_products,
     sum(overstock_flag) as overstock_products
 from datathon_warehouse.mart_monthly_product_health
-where month_start_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where month_start_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and month_start_date <= date_trunc('month', cast('${inputs.date_range.end}' as date))
 group by 1
 order by 1
 ```
@@ -131,6 +132,16 @@ limit 10
 
 ## Lifecycle Distribution
 
+<Alert status="info">
+Lifecycle stages reveal portfolio vitality. "Active" products (sold within last 6 months) are the revenue engine. 
+"Dormant" and "discontinued" products tie up working capital and catalog complexity without generating sales.
+</Alert>
+
+<Alert status="warning">
+359 sold products have negative realized margin (COGS > net revenue after discounts), reflecting deep promotional discounting. 
+These SKUs destroy value on every sale — consider delisting or repricing.
+</Alert>
+
 <BarChart
     data={lifecycle_distribution}
     x=lifecycle_stage
@@ -153,6 +164,11 @@ limit 10
 
 ## Category Pareto
 
+<Alert status="info">
+Category revenue follows a Pareto pattern — a small number of categories drive the majority of revenue. 
+Margin rate varies significantly by category, revealing where pricing power is strongest.
+</Alert>
+
 <BarChart
     data={category_pareto}
     x=category
@@ -174,6 +190,11 @@ limit 10
 />
 
 ## Monthly Health Trend
+
+<Alert status="warning">
+Return rate is a leading quality indicator. Sustained elevation above 5% signals systematic issues 
+in product quality, sizing, or fulfillment damage. Stockout count above 100 products indicates broad availability risk.
+</Alert>
 
 <LineChart
     data={monthly_health_trend}
@@ -203,12 +224,27 @@ limit 10
 
 ## Top Returned Products
 
+<Alert status="info">
+High-return products destroy margin twice — once on the sale, once on reverse logistics. 
+Products with return rates above 20% should trigger immediate quality review or supplier negotiation.
+</Alert>
+
 <DataTable data={top_returned} rows=10 />
 
 ## Top 10 Products by Revenue
 
+<Alert status="info">
+Revenue concentration in top products creates portfolio risk. If the top 10 products face 
+stockout or quality issues, the revenue impact is disproportionate.
+</Alert>
+
 <DataTable data={revenue_share_top10} rows=10 />
 
 ## Lifecycle x Category Margin Matrix
+
+<Alert status="info">
+The margin matrix reveals which lifecycle-category combinations are profitable. 
+"Active" products in high-margin categories are the crown jewels; "dormant" products with negative margin are liabilities.
+</Alert>
 
 <DataTable data={lifecycle_margin} rows=10 />

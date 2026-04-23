@@ -11,8 +11,3 @@ order by metric_key
 ```
 
 <DataTable data={mcq_metrics} rows=10 />
-
-## Notes
-
-- This page provides reproducible metrics backing the Part 1 questions.
-- It does not auto-select options A/B/C/D; answer mapping should be validated in notebook/report context.

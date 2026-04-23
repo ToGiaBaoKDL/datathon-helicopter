@@ -53,7 +53,8 @@ select
     cancelled_revenue_share,
     return_unit_rate
 from datathon_warehouse.mart_monthly_category_performance
-where month_start_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where month_start_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and month_start_date <= date_trunc('month', cast('${inputs.date_range.end}' as date))
   and category in ${inputs.cat_filter.value}
 order by month_start_date, category, segment
 ```
@@ -70,12 +71,23 @@ select
     return_units,
     refund_amount
 from datathon_warehouse.mart_weekly_region_performance
-where week_start_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where week_start_date >= date_trunc('week', cast('${inputs.date_range.start}' as date))
+  and week_start_date <= date_trunc('week', cast('${inputs.date_range.end}' as date))
   and region in ${inputs.region_filter.value}
 order by week_start_date, region
 ```
 
 ## Monthly Category Margin
+
+<Alert status="info">
+Category margin trajectories reveal pricing power and cost discipline. Categories consistently below 
+the 15% target margin may need repricing, cost reduction, or SKU rationalization.
+</Alert>
+
+<Alert status="warning">
+359 products have negative realized margin due to deep discounting. These SKUs drag down category averages 
+and should be reviewed for delisting or repricing.
+</Alert>
 
 <LineChart
     data={category_monthly}
@@ -93,6 +105,11 @@ order by week_start_date, region
 
 ## Weekly Revenue by Region
 
+<Alert status="info">
+Geographic revenue patterns reveal market maturity and growth opportunity. 
+Regions with declining revenue but stable active customers indicate AOV erosion — a pricing problem, not a demand problem.
+</Alert>
+
 <LineChart
     data={region_weekly}
     x=week_start_date
@@ -106,6 +123,11 @@ order by week_start_date, region
 />
 
 ## Weekly Active Customers by Region
+
+<Alert status="info">
+Customer base growth by region indicates market penetration success. 
+Regions where revenue grows faster than active customers are improving monetization; the reverse suggests acquisition without retention.
+</Alert>
 
 <LineChart
     data={region_weekly}

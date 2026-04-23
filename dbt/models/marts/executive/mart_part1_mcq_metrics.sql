@@ -158,7 +158,7 @@ q4 as (
 q5 as (
     select
         'q5_promo_line_percentage' as metric_key,
-        (cast(promo_lines as double) / nullif(total_lines, 0)) * 100.0 as metric_value
+        cast(promo_lines as double) / nullif(total_lines, 0) as metric_value
     from promo_line_share
 ),
 q6 as (

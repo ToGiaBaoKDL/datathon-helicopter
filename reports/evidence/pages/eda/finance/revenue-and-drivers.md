@@ -101,26 +101,20 @@ select
 from numbered
 ```
 
-```sql anomaly_days
-select
-    sales_date,
-    revenue,
-    avg(revenue) over () as mean_revenue,
-    stddev_samp(revenue) over () as std_revenue,
-    mean_revenue + 2 * std_revenue as upper_bound,
-    mean_revenue - 2 * std_revenue as lower_bound,
-    case
-        when revenue > mean_revenue + 2 * std_revenue then 'spike'
-        when revenue < mean_revenue - 2 * std_revenue then 'drop'
-        else 'normal'
-    end as anomaly_flag
-from datathon_warehouse.mart_forecast_daily_base
-where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
-order by sales_date
-```
-
 ```sql anomaly_summary
-select * from anomaly_days where anomaly_flag != 'normal' order by sales_date
+with flagged as (
+    select
+        sales_date,
+        revenue,
+        case
+            when revenue > avg(revenue) over () + 2 * stddev_samp(revenue) over () then 'spike'
+            when revenue < avg(revenue) over () - 2 * stddev_samp(revenue) over () then 'drop'
+            else 'normal'
+        end as anomaly_flag
+    from datathon_warehouse.mart_forecast_daily_base
+    where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+)
+select sales_date, revenue, anomaly_flag from flagged where anomaly_flag != 'normal' order by sales_date
 ```
 
 ## Revenue Trend
@@ -211,9 +205,10 @@ into whether the lift justifies the margin sacrifice.
 
 ## Revenue Pattern by Day of Week
 
-<Alert status="positive">
-Weekend revenue is typically higher due to increased browsing time and promotional activity. 
-Use this pattern to optimize ad spend allocation.
+<Alert status="info">
+Wednesday has the highest average revenue (~4.7M VND), while Saturday is the weakest (~3.9M). 
+This contradicts the common assumption that weekends drive peak trading. 
+Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak demand days.
 </Alert>
 
 <BarChart

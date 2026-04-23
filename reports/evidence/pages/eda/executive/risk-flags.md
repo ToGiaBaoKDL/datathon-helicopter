@@ -42,6 +42,16 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 
 ## Alert Overview
 
+<Alert status="info">
+Risk flags are derived from dynamic thresholds (quantiles) on executive KPIs. 
+A flag = 1 means the day was an extreme outlier — not just a bad day, but a statistically unusual one.
+</Alert>
+
+<Alert status="warning">
+<b>Conversion drop</b> is the most frequent flag and the most dangerous. Days below p10 conversion 
+are bleeding revenue despite normal traffic. This is a structural problem, not a seasonal blip.
+</Alert>
+
 <BigValue
     data={risk_summary}
     value=stockout_risk_days
@@ -63,6 +73,11 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 <DataTable data={risk_summary} rows=10 />
 
 ## Daily Risk Timeline
+
+<Alert status="info">
+Timeline view reveals clustering — multiple flags on consecutive days suggest systemic issues 
+(e.g., checkout bug, supplier batch defect) rather than random noise.
+</Alert>
 
 <LineChart
     data={risk_flags}

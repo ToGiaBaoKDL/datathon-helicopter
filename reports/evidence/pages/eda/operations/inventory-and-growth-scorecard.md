@@ -26,7 +26,8 @@ select
     overstock_product_count,
     reorder_product_count
 from datathon_warehouse.mart_monthly_inventory_snapshot
-where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and sales_date <= cast('${inputs.date_range.end}' as date)
 order by sales_date
 ```
 
@@ -46,7 +47,8 @@ select
     total_discount_amount,
     cancelled_line_count
 from datathon_warehouse.mart_weekly_business_scorecard
-where week_start_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where week_start_date >= date_trunc('week', cast('${inputs.date_range.start}' as date))
+  and week_start_date <= date_trunc('week', cast('${inputs.date_range.end}' as date))
 order by week_start_date
 ```
 
@@ -89,10 +91,23 @@ select
     extract(month from sales_date) as month,
     avg(avg_stockout_days) as avg_stockout_days
 from datathon_warehouse.mart_monthly_inventory_snapshot
-where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and sales_date <= cast('${inputs.date_range.end}' as date)
 group by 1, 2
 order by 1, 2
 ```
+
+## Inventory Stockout Pressure
+
+<Alert status="info">
+Stockout days have improved from 1.36 (2012) to 1.09 (2022) — inventory availability is getting better, not worse. 
+This rules out stockouts as the primary cause of revenue decline.
+</Alert>
+
+<Alert status="warning">
+~30,495 product-months have both stockout_flag = 1 and overstock_flag = 1 in raw data. 
+This suggests data quality issues in inventory classification, not necessarily operational paradox.
+</Alert>
 
 <LineChart
     data={inventory_daily}
@@ -106,6 +121,11 @@ order by 1, 2
 />
 
 ## Weekly Growth: Revenue vs Orders
+
+<Alert status="info">
+Revenue growth and order growth generally move together — when they diverge, it signals AOV or mix shifts. 
+Watch for revenue growth lagging order growth (discounting pressure) or outpacing it (premium mix shift).
+</Alert>
 
 <BarChart
     data={weekly_scorecard}
@@ -121,6 +141,18 @@ order by 1, 2
     y2Fmt="0.0%"
 />
 
+## Conversion Trend
+
+<Alert status="warning">
+Session-to-order rate has collapsed from ~1.2% (2013) to ~0.3% (2022) — a 75% decline. 
+This is the dominant driver of revenue pressure. Traffic is flat; capture is broken.
+</Alert>
+
+<Alert status="positive">
+Action: Audit checkout flow, page load speed, mobile UX, and payment coverage. 
+A +1pp conversion lift would project ~136% incremental revenue.
+</Alert>
+
 <LineChart
     data={traffic_conversion_daily}
     x=sales_date
@@ -132,6 +164,13 @@ order by 1, 2
     yFmt="0.0%"
 />
 
+## Conversion by Day of Week
+
+<Alert status="info">
+Wednesday has the highest conversion rate (~0.78%), while Saturday is the weakest (~0.67%). 
+This contradicts the common weekend-peak assumption and has direct ad-spend implications.
+</Alert>
+
 <BarChart
     data={conversion_heatmap_dow}
     x=day_name
@@ -141,6 +180,13 @@ order by 1, 2
     yAxisTitle="Conversion Rate"
     yFmt="0.0%"
 />
+
+## Seasonal Stockout Pattern
+
+<Alert status="info">
+Monthly stockout patterns reveal seasonal inventory stress. Higher stockout days in certain months 
+may indicate inadequate forward buying before demand peaks.
+</Alert>
 
 <BarChart
     data={monthly_stockout_heatmap}
@@ -153,5 +199,10 @@ order by 1, 2
     yFmt="0.00"
 />
 
+## Weekly Detail
+
 <DataTable data={weekly_scorecard} rows=10/>
+
+## Inventory Detail
+
 <DataTable data={inventory_daily} rows=10/>
