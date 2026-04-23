@@ -289,7 +289,8 @@ Consider allocating more ad spend on Friday–Sunday.
 
 <Alert status="info">
 This scenario shows the revenue impact of a 1 percentage point increase in session-to-order rate, 
-holding all other factors constant.
+holding all other factors constant. The high percentage lift reflects the low base conversion rate (~0.7%) — 
+a small absolute increase more than doubles the rate.
 </Alert>
 
 <BigValue

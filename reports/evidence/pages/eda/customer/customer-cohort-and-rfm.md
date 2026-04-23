@@ -111,6 +111,7 @@ order by avg_revenue desc
 ```sql churn_risk
 select
     case
+        when avg_days_between_orders is null then 'Single Order'
         when recency_days <= avg_days_between_orders then 'Active'
         when recency_days <= 2 * avg_days_between_orders then 'At Risk'
         else 'Churned'
@@ -121,7 +122,6 @@ select
 from datathon_warehouse.mart_customer_rfm
 where acquisition_channel in ${inputs.channel_filter.value}
   and age_group in ${inputs.age_filter.value}
-  and avg_days_between_orders is not null
 group by churn_risk
 order by avg_recency
 ```
@@ -243,7 +243,7 @@ A 5% churn in Platinum represents a larger revenue loss than a 20% churn in Bron
 
 <Alert status="warning">
 Customers in the "Churned" bucket have not ordered in more than 2× their normal gap. 
-These are prime candidates for win-back campaigns.
+"Single Order" customers have only purchased once — they need a different activation strategy than win-back.
 </Alert>
 
 <BarChart

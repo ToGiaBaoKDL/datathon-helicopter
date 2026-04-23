@@ -128,7 +128,7 @@ select * from anomaly_days where anomaly_flag != 'normal' order by sales_date
 <Alert status="info">
 Revenue trend slope: <Value data={revenue_trend} column=daily_slope fmt=num0/> VND/day 
 (R² = <Value data={revenue_trend} column=r2 fmt=pct1/>).
-<Value data={revenue_trend} column=r2/> > 0.3 indicates a meaningful directional trend.
+R² near 0 indicates a weak linear trend — revenue is driven more by seasonality and promotions than by a steady long-term direction.
 </Alert>
 
 <AreaChart
