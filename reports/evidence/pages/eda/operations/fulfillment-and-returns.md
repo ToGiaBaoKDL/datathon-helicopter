@@ -40,6 +40,17 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
+```sql returns_long
+select sales_date, 'Return Record Rate' as metric, return_record_rate as value
+from datathon_warehouse.mart_daily_returns_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select sales_date, 'Return Unit Rate' as metric, return_unit_rate as value
+from datathon_warehouse.mart_daily_returns_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date, metric
+```
+
 ```sql returns_reason_summary
 select
     'defective' as return_reason,
@@ -109,6 +120,33 @@ Delivery time has remained remarkably stable at ~6 days across the entire datase
 This is a strength — unlike conversion or revenue, fulfillment reliability has not degraded over time.
 </Alert>
 
+<Alert status="warning">
+Only <b>0.14% of orders have free shipping</b>. In e-commerce, free shipping is one of the highest-ROI conversion tactics. 
+With average shipping fee at only 5 VND (effectively free already), the business should test 
+"free shipping on all orders" messaging to remove the psychological barrier.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={fulfillment_daily}
+        value=avg_days_to_deliver
+        title="Days to Deliver"
+        fmt="0.0"
+    />
+    <BigValue
+        data={fulfillment_daily}
+        value=avg_days_to_ship
+        title="Days to Ship"
+        fmt="0.0"
+    />
+    <BigValue
+        data={fulfillment_daily}
+        value=avg_days_in_transit
+        title="Days in Transit"
+        fmt="0.0"
+    />
+</Grid>
+
 <LineChart
     data={fulfillment_daily}
     x=sales_date
@@ -133,24 +171,12 @@ Action: Focus on controllable return reasons — "defective" and "wrong_size" ar
 </Alert>
 
 <LineChart
-    data={returns_daily}
+    data={returns_long}
     x=sales_date
-    y=return_record_rate
-    title="Daily Return Record Rate"
-    subtitle="Share of order lines with a return record"
-    yAxisTitle="Return Rate"
-    xAxisTitle="Date"
-    yFmt="0.0%"
->
-    <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
-</LineChart>
-
-<LineChart
-    data={returns_daily}
-    x=sales_date
-    y=return_unit_rate
-    title="Daily Return Unit Rate"
-    subtitle="Share of sold units that are returned"
+    y=value
+    series=metric
+    title="Daily Return Rates"
+    subtitle="Record rate (lines) vs Unit rate (units) — divergence signals batch defects"
     yAxisTitle="Return Rate"
     xAxisTitle="Date"
     yFmt="0.0%"

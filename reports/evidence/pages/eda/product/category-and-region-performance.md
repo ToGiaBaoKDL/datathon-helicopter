@@ -42,7 +42,22 @@ select distinct region from datathon_warehouse.mart_weekly_region_performance or
     title="Region"
 />
 
-```sql category_monthly
+```sql category_monthly_agg
+select
+    month_start_date,
+    category,
+    sum(gross_revenue)::double as gross_revenue,
+    sum(gross_profit) / nullif(sum(gross_revenue), 0) as gross_margin_rate,
+    sum(return_units)::double / nullif(sum(sold_units), 0) as return_unit_rate
+from datathon_warehouse.mart_monthly_category_performance
+where month_start_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and month_start_date <= date_trunc('month', cast('${inputs.date_range.end}' as date))
+  and category in ${inputs.cat_filter.value}
+group by 1, 2
+order by month_start_date, category
+```
+
+```sql category_segment_detail
 select
     month_start_date,
     category,
@@ -90,7 +105,7 @@ and should be reviewed for delisting or repricing.
 </Alert>
 
 <LineChart
-    data={category_monthly}
+    data={category_monthly_agg}
     x=month_start_date
     y=gross_margin_rate
     series=category
@@ -101,6 +116,49 @@ and should be reviewed for delisting or repricing.
     yFmt="0.0%"
 >
     <ReferenceLine y=0.15 label="15% Target" hideValue=true color=positive/>
+</LineChart>
+
+## Category Revenue Trend
+
+<Alert status="info">
+Monthly revenue by category. Watch for categories that are growing or declining over time — 
+this reveals portfolio shifts and market trends.
+</Alert>
+
+<BarChart
+    data={category_monthly_agg}
+    x=month_start_date
+    y=gross_revenue
+    series=category
+    title="Monthly Revenue by Category"
+    subtitle="Revenue trajectory across selected categories"
+    yAxisTitle="Revenue"
+    yFmt="num0"
+/>
+
+## Category Return Rate Trend
+
+<Alert status="info">
+Return rate by category over time. Categories with sustained high return rates indicate 
+systematic quality or sizing issues specific to that category.
+</Alert>
+
+<Alert status="warning">
+High revenue + high return rate = growth at the cost of quality — unsustainable. 
+Low revenue + high return rate = double crisis — fix quality first.
+</Alert>
+
+<LineChart
+    data={category_monthly_agg}
+    x=month_start_date
+    y=return_unit_rate
+    series=category
+    title="Monthly Return Rate by Category"
+    subtitle="Quality signal across selected categories"
+    yAxisTitle="Return Rate"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
 </LineChart>
 
 ## Weekly Revenue by Region
@@ -143,7 +201,7 @@ Regions where revenue grows faster than active customers are improving monetizat
 
 ## Category Detail
 
-<DataTable data={category_monthly} rows=10/>
+<DataTable data={category_segment_detail} rows=10/>
 
 ## Region Detail
 

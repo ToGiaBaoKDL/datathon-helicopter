@@ -226,6 +226,41 @@ Focus on increasing first-repeat rate (month 1) rather than long-term retention.
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
 </LineChart>
 
+## Cohort Retention Heatmap
+
+```sql cohort_heatmap
+select
+    date_part('year', cohort_month)::varchar || '-' || lpad(date_part('month', cohort_month)::varchar, 2, '0') as cohort_label,
+    months_since_first_order,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+<Alert status="info">
+The cohort heatmap is the classic visualization for retention analysis. 
+Each row is a cohort (customers who first ordered in the same month), each column is months since first order.
+</Alert>
+
+<Alert status="positive">
+<b>How to read:</b> Darker colors = higher retention. Look for rows that fade slower (better cohort quality) 
+and columns where all rows stabilize (baseline retention floor).
+</Alert>
+
+<Heatmap
+    data={cohort_heatmap}
+    x=months_since_first_order
+    y=cohort_label
+    value=avg_retention_rate
+    title="Cohort Retention Heatmap"
+    subtitle="Retention rate by cohort month and months since first order"
+    valueFmt="0.0%"
+/>
+
 ## CLV Tier Distribution
 
 <Alert status="info">
@@ -289,6 +324,80 @@ For Churned customers, use a "we miss you" campaign with personalized product re
     yAxisTitle="Avg Revenue"
     yFmt="num0"
 />
+
+## Retention by Acquisition Channel
+
+```sql retention_by_channel
+select
+    months_since_first_order,
+    acquisition_channel,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+<Alert status="info">
+Retention quality varies dramatically by acquisition channel. 
+<b>Direct</b> and <b>referral</b> customers have ~2× higher month-1 retention than <b>organic search</b> and <b>paid search</b>.
+This suggests intent quality: customers who seek out the brand directly are more committed than browsers from search ads.
+</Alert>
+
+<Alert status="positive">
+Action: Shift acquisition budget toward direct and referral programs. 
+For paid search, tighten keyword targeting to high-intent terms rather than broad-match browsing keywords.
+</Alert>
+
+<LineChart
+    data={retention_by_channel}
+    x=months_since_first_order
+    y=avg_retention_rate
+    series=acquisition_channel
+    title="Retention Curve by Acquisition Channel"
+    subtitle="Month-0 to month-12 retention decay by channel"
+    yAxisTitle="Retention Rate"
+    xAxisTitle="Months Since First Order"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
+</LineChart>
+
+## Retention by Age Group
+
+```sql retention_by_age
+select
+    months_since_first_order,
+    age_group,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+<Alert status="info">
+<b>55+ customers</b> have the highest month-1 retention (~11.5%), while <b>25–34</b> is the weakest (~7.5%). 
+Older customers are more loyal but represent a smaller segment — the opportunity is improving retention in the largest group (25–34).
+</Alert>
+
+<LineChart
+    data={retention_by_age}
+    x=months_since_first_order
+    y=avg_retention_rate
+    series=age_group
+    title="Retention Curve by Age Group"
+    subtitle="Month-0 to month-12 retention decay by age"
+    yAxisTitle="Retention Rate"
+    xAxisTitle="Months Since First Order"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
+</LineChart>
 
 ## Acquisition Channel Performance
 

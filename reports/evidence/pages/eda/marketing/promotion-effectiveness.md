@@ -170,6 +170,41 @@ Test expanding fixed-discount promos for high-margin categories where discount d
     yFmt="0.0%"
 />
 
+## Campaign Efficiency Scatter
+
+```sql campaign_scatter
+select
+    promo_name,
+    promo_type,
+    discount_rate,
+    total_net_revenue as total_revenue,
+    total_orders,
+    total_discount_amount as total_discount,
+    avg_order_value
+from datathon_warehouse.mart_promotion_effectiveness
+where total_orders > 0
+  and promo_type in ${inputs.type_filter.value}
+  and promo_channel in ${inputs.channel_filter.value}
+```
+
+<Alert status="info">
+Each dot is a campaign. Position reveals efficiency: top-left = low discount, high revenue (ideal); 
+bottom-right = deep discount, low revenue (margin destroyer).
+</Alert>
+
+<ScatterPlot
+    data={campaign_scatter}
+    x=discount_rate
+    y=total_revenue
+    series=promo_type
+    title="Campaign Efficiency: Discount vs Revenue"
+    subtitle="Top-left = efficient promos; bottom-right = margin destroyers"
+    xAxisTitle="Discount Rate"
+    yAxisTitle="Net Revenue"
+    xFmt="0.0%"
+    yFmt="num0"
+/>
+
 ## Campaign Timeline
 
 <Alert status="info">
@@ -178,6 +213,82 @@ combine modest discount depth with strong channel reach.
 </Alert>
 
 <DataTable data={promo_timeline} rows=10 />
+
+## Promotion Category Impact
+
+```sql category_impact
+select
+    coalesce(applicable_category, 'All Categories') as category_scope,
+    count(*) as campaigns,
+    sum(total_net_revenue) as total_revenue,
+    avg(discount_rate) as avg_discount_rate,
+    avg(total_net_revenue / nullif(total_discount_amount, 0)) as roi,
+    avg(avg_order_value) as avg_aov
+from datathon_warehouse.mart_promotion_effectiveness
+where total_orders > 0
+  and promo_type in ${inputs.type_filter.value}
+  and promo_channel in ${inputs.channel_filter.value}
+group by 1
+order by total_revenue desc
+```
+
+```sql category_detail
+select
+    applicable_category as category,
+    promo_name,
+    promo_type,
+    total_net_revenue as total_revenue,
+    discount_rate,
+    total_orders
+from datathon_warehouse.mart_promotion_effectiveness
+where applicable_category is not null
+  and total_orders > 0
+  and promo_type in ${inputs.type_filter.value}
+  and promo_channel in ${inputs.channel_filter.value}
+order by applicable_category, total_revenue desc
+```
+
+<Alert status="info">
+<b>Category-restricted promotions</b> (Streetwear, Outdoor) show different efficiency profiles than <b>site-wide</b> campaigns. 
+Category promos typically have higher AOV but lower total scale — they attract buyers with existing category intent.
+</Alert>
+
+<Alert status="positive">
+Action: Streetwear promos yield higher AOV than Outdoor. Test category-specific campaigns for high-margin segments 
+rather than always defaulting to site-wide percentage discounts.
+</Alert>
+
+<BarChart
+    data={category_impact}
+    x=category_scope
+    y=total_revenue
+    title="Revenue by Promotion Category Scope"
+    subtitle="Site-wide vs category-restricted campaigns"
+    yAxisTitle="Net Revenue"
+    yFmt="num0"
+/>
+
+<BarChart
+    data={category_impact}
+    x=category_scope
+    y=avg_discount_rate
+    title="Average Discount Rate by Category Scope"
+    subtitle="Do category promos require deeper discounts?"
+    yAxisTitle="Discount Rate"
+    yFmt="0.0%"
+/>
+
+<BarChart
+    data={category_impact}
+    x=category_scope
+    y=avg_aov
+    title="Average Order Value by Category Scope"
+    subtitle="Category promos attract higher-intent buyers"
+    yAxisTitle="AOV"
+    yFmt="num0"
+/>
+
+<DataTable data={category_detail} rows=10 />
 
 ## Discount Depth vs Revenue
 

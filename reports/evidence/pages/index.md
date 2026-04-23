@@ -32,6 +32,9 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [Product Lifecycle and Health](./eda/product/product-lifecycle-and-health)
 - [Category and Region Performance](./eda/product/category-and-region-performance)
 
+### Research
+- [Analytical Questions & Findings](./eda/analytical-questions)
+
 ## Data Build Order
 
 Run these commands from repository root before opening this app:

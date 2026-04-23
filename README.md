@@ -40,8 +40,22 @@ uv run datathon build-raw --strict
 # 4. Run dbt pipeline
 uv run dbt build --project-dir dbt --profiles-dir dbt
 
-# 5. Tune, compare models, and generate submission
-uv run datathon tune --model-type catboost --n-trials 30 --patience 5
+# 5. Tune all models, merge configs, compare, and generate submission
+uv run datathon tune --model-type lightgbm --n-trials 30 --patience 5
+uv run datathon tune --model-type xgboost   --n-trials 30 --patience 5
+uv run datathon tune --model-type catboost  --n-trials 30 --patience 5
+
+# Merge individual delta configs into one file for compare-models
+uv run python -c "
+import yaml, glob, pathlib
+base = yaml.safe_load(open('configs/modeling.yaml'))
+for p in sorted(glob.glob('configs/tuned/*.yaml')):
+    delta = yaml.safe_load(open(p))
+    for k, v in (delta.get('models') or {}).items():
+        base.setdefault('models', {})[k] = v
+pathlib.Path('configs/tuned/all_models.yaml').write_text(yaml.dump(base, sort_keys=False, allow_unicode=True))
+"
+
 uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
 uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.csv
 ```
@@ -86,7 +100,7 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 | `datathon train --mode evaluate --model-type lightgbm` | Expanding-window CV vs seasonal naive |
 | `datathon train --mode train-final --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Train final model with tuned params |
 | `datathon predict --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Generate submission from saved model |
-| `datathon compare-models --config configs/tuned/all_models.yaml` | CV all models + ensemble, pick true winner, submit |
+| `datathon compare-models --config configs/tuned/all_models.yaml` | CV all models + ensemble, pick true winner, train finals, submit |
 | `datathon ensemble --model-types lightgbm,xgboost --weights 0.5,0.5` | Weighted ensemble from trained models |
 | `datathon explain --model-type lightgbm` | Generate SHAP summary & bar plots |
 | `datathon baseline --mode evaluate` | Seasonal-naive baseline benchmark |
@@ -105,6 +119,7 @@ models:
   catboost:
     learning_rate: 0.0789
     depth: 5
+    iterations: 487   # best iteration from early stopping (injected automatically)
     ...
 ```
 
@@ -117,9 +132,21 @@ uv run datathon train --mode train-final --model-type catboost --config configs/
 Merge multiple deltas into a single file for `compare-models`:
 
 ```bash
-# configs/tuned/all_models.yaml contains tuned params for all 3 models
+# Merge individual tuned configs into one file
+uv run python -c "
+import yaml, glob, pathlib
+base = yaml.safe_load(open('configs/modeling.yaml'))
+for p in sorted(glob.glob('configs/tuned/*.yaml')):
+    delta = yaml.safe_load(open(p))
+    for k, v in (delta.get('models') or {}).items():
+        base.setdefault('models', {})[k] = v
+pathlib.Path('configs/tuned/all_models.yaml').write_text(yaml.dump(base, sort_keys=False, allow_unicode=True))
+"
+
 uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
 ```
+
+> **Why merge?** `compare-models` only accepts a single `--config`. Each `tune` run emits a delta for one model. Merging them ensures every model uses its own tuned params during the comparison.
 
 ---
 

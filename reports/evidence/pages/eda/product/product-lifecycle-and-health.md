@@ -47,6 +47,7 @@ select
     lifecycle_stage,
     count(*) as products,
     sum(total_revenue) as total_revenue,
+    sum(total_revenue) / count(*) as avg_revenue_per_product,
     avg(realized_margin_rate) as avg_margin_rate,
     avg(return_unit_rate) as avg_return_rate
 from datathon_warehouse.mart_product_lifetime_performance
@@ -156,11 +157,22 @@ These SKUs destroy value on every sale — consider delisting or repricing.
     data={lifecycle_distribution}
     x=lifecycle_stage
     y=total_revenue
-    title="Revenue by Lifecycle Stage"
+    title="Total Revenue by Lifecycle Stage"
     subtitle="Where revenue is concentrated in the portfolio"
     yAxisTitle="Revenue"
     yFmt="num0"
 />
+
+<BarChart
+    data={lifecycle_distribution}
+    x=lifecycle_stage
+    y=avg_revenue_per_product
+    title="Avg Revenue per Product by Lifecycle Stage"
+    subtitle="Revenue efficiency: active products generate far more revenue per SKU"
+    yAxisTitle="Revenue per Product"
+    yFmt="num0"
+/>
+
 
 ## Category Pareto
 
@@ -245,6 +257,11 @@ stockout or quality issues, the revenue impact is disproportionate.
 <Alert status="info">
 The margin matrix reveals which lifecycle-category combinations are profitable. 
 "Active" products in high-margin categories are the crown jewels; "dormant" products with negative margin are liabilities.
+</Alert>
+
+<Alert status="positive">
+Action: Prioritize stock for "active" products in high-margin categories. 
+For "dormant" products with negative margin, run clearance sales or delist to free working capital.
 </Alert>
 
 <DataTable data={lifecycle_margin} rows=10 />

@@ -97,6 +97,58 @@ group by 1, 2
 order by 1, 2
 ```
 
+## Inventory Health Overview
+
+```sql inventory_kpis
+select
+    avg(avg_days_of_supply) as avg_days_supply,
+    avg(avg_fill_rate) as avg_fill_rate,
+    avg(avg_sell_through_rate) as avg_sell_through,
+    avg(stockout_product_count) as avg_stockout_products,
+    avg(overstock_product_count) as avg_overstock_products
+from datathon_warehouse.mart_monthly_inventory_snapshot
+where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
+  and sales_date <= cast('${inputs.date_range.end}' as date)
+```
+
+<Alert status="warning">
+The business carries <b>~930 days of supply</b> on average — nearly 2.5 years of inventory. 
+With a sell-through rate of only 15.2%, working capital is severely tied up in slow-moving stock. 
+This is a bigger problem than stockouts.
+</Alert>
+
+<Alert status="positive">
+Action: Target 90 days of supply (industry standard). A reduction from 930 to 90 days would free 
+~80% of inventory capital for reinvestment in marketing or product development.
+</Alert>
+
+<Grid cols=4>
+    <BigValue
+        data={inventory_kpis}
+        value=avg_days_supply
+        title="Days of Supply"
+        fmt="0"
+    />
+    <BigValue
+        data={inventory_kpis}
+        value=avg_fill_rate
+        title="Fill Rate"
+        fmt="0.0%"
+    />
+    <BigValue
+        data={inventory_kpis}
+        value=avg_sell_through
+        title="Sell-Through Rate"
+        fmt="0.0%"
+    />
+    <BigValue
+        data={inventory_kpis}
+        value=avg_stockout_products
+        title="Stockout Products"
+        fmt="0"
+    />
+</Grid>
+
 ## Inventory Stockout Pressure
 
 <Alert status="info">
@@ -141,6 +193,47 @@ Watch for revenue growth lagging order growth (discounting pressure) or outpacin
     y2Fmt="0.0%"
 />
 
+## Engagement Quality Trend
+
+```sql engagement_daily
+select
+    sales_date,
+    bounce_rate,
+    pages_per_session,
+    avg_session_duration_sec
+from datathon_warehouse.mart_daily_marketing_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
+<Alert status="info">
+Bounce rate (~0.4%) is suspiciously low for e-commerce — typical is 20–50%. Pages per session (~4.3) is healthy. 
+If bounce rate is measured as "single-page sessions / all sessions", the 0.4% figure suggests 
+almost all visitors browse multiple pages. This is either exceptional engagement or a measurement definition issue.
+</Alert>
+
+<LineChart
+    data={engagement_daily}
+    x=sales_date
+    y=bounce_rate
+    title="Daily Bounce Rate"
+    subtitle="Share of sessions viewing only one page"
+    yAxisTitle="Bounce Rate"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=info/>
+</LineChart>
+
+<LineChart
+    data={engagement_daily}
+    x=sales_date
+    y=pages_per_session
+    title="Pages per Session"
+    subtitle="Average page views per visitor session"
+    yAxisTitle="Pages"
+    yFmt="0.0"
+/>
+
 ## Conversion Trend
 
 <Alert status="warning">
@@ -150,7 +243,7 @@ This is the dominant driver of revenue pressure. Traffic is flat; capture is bro
 
 <Alert status="positive">
 Action: Audit checkout flow, page load speed, mobile UX, and payment coverage. 
-A +1pp conversion lift would project ~136% incremental revenue.
+A +1pp conversion lift would project ~150% incremental revenue.
 </Alert>
 
 <LineChart
@@ -186,6 +279,11 @@ This contradicts the common weekend-peak assumption and has direct ad-spend impl
 <Alert status="info">
 Monthly stockout patterns reveal seasonal inventory stress. Higher stockout days in certain months 
 may indicate inadequate forward buying before demand peaks.
+</Alert>
+
+<Alert status="positive">
+Action: If stockout days spike consistently before Q4 (holiday season), increase safety stock 
+by 20–30% in September to cover October–November demand surge.
 </Alert>
 
 <BarChart

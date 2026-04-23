@@ -31,6 +31,21 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
+```sql risk_flags_long
+select sales_date, 'Stockout Risk' as flag_type, stockout_risk_flag as flag_value
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select sales_date, 'Return Spike', return_spike_flag
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select sales_date, 'Conversion Drop', conversion_drop_flag
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date, flag_type
+```
+
 ```sql risk_summary
 select
     sum(stockout_risk_flag) as stockout_risk_days,
@@ -70,8 +85,6 @@ are bleeding revenue despite normal traffic. This is a structural problem, not a
     title="Conversion Drop Days"
 />
 
-<DataTable data={risk_summary} rows=10 />
-
 ## Daily Risk Timeline
 
 <Alert status="info">
@@ -79,34 +92,23 @@ Timeline view reveals clustering — multiple flags on consecutive days suggest 
 (e.g., checkout bug, supplier batch defect) rather than random noise.
 </Alert>
 
-<LineChart
-    data={risk_flags}
-    x=sales_date
-    y=stockout_risk_flag
-    title="Stockout Risk Flag"
-    subtitle="1 = day exceeded 90th percentile stockout days"
-    yAxisTitle="Flag"
-    xAxisTitle="Date"
-/>
+<Alert status="positive">
+<b>Recommended response by flag type:</b>
+<br/>• <b>Stockout risk</b> → Expedite purchase orders for top-moving SKUs; check if spike correlates with promo campaigns.
+<br/>• <b>Return spike</b> → Quarantine recent batch from primary supplier; inspect return reason mix for pattern changes.
+<br/>• <b>Conversion drop</b> → Check for checkout bugs, payment gateway issues, or page-speed degradation on high-traffic days.
+</Alert>
 
 <LineChart
-    data={risk_flags}
+    data={risk_flags_long}
     x=sales_date
-    y=return_spike_flag
-    title="Return Spike Flag"
-    subtitle="1 = day exceeded 95th percentile return record rate"
-    yAxisTitle="Flag"
+    y=flag_value
+    series=flag_type
+    title="Daily Risk Flags Timeline"
+    subtitle="Clustering of flags reveals systemic issues"
+    yAxisTitle="Flag (0 = normal, 1 = triggered)"
     xAxisTitle="Date"
-/>
-
-<LineChart
-    data={risk_flags}
-    x=sales_date
-    y=conversion_drop_flag
-    title="Conversion Drop Flag"
-    subtitle="1 = day below 10th percentile session-to-order rate"
-    yAxisTitle="Flag"
-    xAxisTitle="Date"
+    yFmt="0"
 />
 
 ## Daily Detail

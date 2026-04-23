@@ -53,7 +53,28 @@ limit 1
 ```
 
 ```sql revenue_long
-select sales_date, 'Revenue' as metric, revenue as value
+select
+    sales_date,
+    'Revenue' as metric,
+    revenue as value
+from datathon_warehouse.mart_daily_executive_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
+```sql peak_revenue
+select max(revenue) as peak_revenue
+from datathon_warehouse.mart_daily_executive_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+```
+
+```sql revenue_rolling
+select
+    sales_date,
+    'Revenue' as metric,
+    revenue as value,
+    avg(revenue) over (order by sales_date rows between 6 preceding and current row) as roll_7d,
+    avg(revenue) over (order by sales_date rows between 27 preceding and current row) as roll_28d
 from datathon_warehouse.mart_daily_executive_kpis
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 order by sales_date
@@ -200,7 +221,8 @@ Conversion: <Value data={latest_snapshot} column=session_to_order_rate fmt=pct1/
 
 <Alert status="info">
 Revenue trend shows daily top-line movement. Days above the mean line (dashed) indicate above-average performance. 
-Watch for sustained periods below the mean — this signals potential demand or operational issues.
+The green "Peak" line shows the highest daily revenue in the selected period — the gap between current and peak 
+is the recovery opportunity.
 </Alert>
 
 <AreaChart
@@ -215,7 +237,36 @@ Watch for sustained periods below the mean — this signals potential demand or 
     yFmt="num0"
 >
     <ReferenceLine data={mean_revenue} y=mean_revenue label="Avg" hideValue=true color=info/>
+    <ReferenceLine data={peak_revenue} y=peak_revenue label="Peak" hideValue=true color=positive opacity=0.5/>
 </AreaChart>
+
+## Revenue Trend (Rolling Average)
+
+<Alert status="info">
+Daily revenue is noisy — promotions, weekends, and outliers create volatility. 
+Rolling averages smooth this noise to reveal the true underlying trend.
+</Alert>
+
+<Alert status="positive">
+<b>How to read:</b> 7-day rolling captures short-term momentum (week-to-week). 28-day rolling captures monthly trajectory. 
+When 7-day crosses above 28-day, momentum is accelerating. When it crosses below, momentum is decelerating.
+</Alert>
+
+<LineChart
+    data={revenue_rolling}
+    x=sales_date
+    y=roll_7d
+    y2=roll_28d
+    y2SeriesType=line
+    title="Revenue Rolling Averages"
+    subtitle="7-day (short-term momentum) vs 28-day (monthly trajectory)"
+    yAxisTitle="Revenue"
+    y2AxisTitle="Revenue"
+    xAxisTitle="Date"
+    yFmt="num0"
+    y2Fmt="num0"
+/>
+
 
 ## Rate Signals
 

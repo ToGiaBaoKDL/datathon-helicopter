@@ -185,4 +185,9 @@ these are controllable unlike "changed_mind".
 
 ## Trend Detail
 
+<Alert status="info">
+Yearly averages for deep-dive. Compare year-over-year changes to spot inflection points. 
+2016 marks the peak; 2019–2022 shows the conversion collapse in full effect.
+</Alert>
+
 <DataTable data={trend_summary} rows=15 />

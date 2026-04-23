@@ -89,6 +89,33 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
+```sql yoy_monthly_growth
+with monthly as (
+    select
+        date_trunc('month', sales_date) as month_start,
+        sum(revenue) as monthly_revenue,
+        sum(cogs) as monthly_cogs,
+        sum(order_count) as monthly_orders,
+        sum(cancelled_line_count) as monthly_cancelled
+    from datathon_warehouse.mart_forecast_daily_base
+    where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+    group by 1
+)
+select
+    month_start,
+    monthly_revenue,
+    monthly_cogs,
+    monthly_orders,
+    monthly_cancelled,
+    monthly_cancelled::double / nullif(monthly_orders, 0) as cancellation_rate,
+    lag(monthly_revenue) over (order by month_start) as prev_month_revenue,
+    lag(monthly_revenue, 12) over (order by month_start) as yoy_revenue,
+    (monthly_revenue - prev_month_revenue) / nullif(prev_month_revenue, 0) as mom_growth,
+    (monthly_revenue - yoy_revenue) / nullif(yoy_revenue, 0) as yoy_growth
+from monthly
+order by month_start
+```
+
 ```sql revenue_trend
 with numbered as (
     select revenue, row_number() over (order by sales_date) as rn
@@ -99,6 +126,15 @@ select
     regr_slope(revenue, rn) as daily_slope,
     regr_r2(revenue, rn) as r2
 from numbered
+```
+
+```sql anomaly_bounds
+select
+    avg(revenue) - 2 * stddev_samp(revenue) as lower_bound,
+    avg(revenue) + 2 * stddev_samp(revenue) as upper_bound,
+    avg(revenue) as mean_revenue
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 ```
 
 ```sql anomaly_summary
@@ -122,7 +158,12 @@ select sales_date, revenue, anomaly_flag from flagged where anomaly_flag != 'nor
 <Alert status="info">
 Revenue trend slope: <Value data={revenue_trend} column=daily_slope fmt=num0/> VND/day 
 (R² = <Value data={revenue_trend} column=r2 fmt=pct1/>).
-R² near 0 indicates a weak linear trend — revenue is driven more by seasonality and promotions than by a steady long-term direction.
+</Alert>
+
+<Alert status="warning">
+R² = 8.8% means the linear model explains almost nothing. The real story is a <b>structural break</b>: 
+revenue rose to a peak in 2016 (~5.75M/day) then collapsed after 2018 to ~2.9M/day — a 50% drop. 
+This is not gradual decline; it's a regime change. The cause: conversion collapse (1.2% → 0.3%), not traffic loss.
 </Alert>
 
 <AreaChart
@@ -135,13 +176,20 @@ R² near 0 indicates a weak linear trend — revenue is driven more by seasonali
     title="Daily Revenue and COGS"
     subtitle="Top-line scale vs direct cost of goods sold"
     yFmt="num0"
-/>
+>
+    <ReferenceArea data={anomaly_bounds} yMin=lower_bound yMax=upper_bound color=gray opacity=0.1/>
+</AreaChart>
 
 ## Anomaly Detection
 
 <Alert status="warning">
-Days with revenue beyond ±2σ from the mean are flagged below. 
+Days with revenue beyond the shaded ±2σ band (gray area on chart above) are flagged below. 
 Spikes may indicate successful promotions; drops may signal stockouts or traffic issues.
+</Alert>
+
+<Alert status="info">
+<b>How to read:</b> The gray band on the Revenue and COGS chart represents the "normal" range (mean ± 2 standard deviations). 
+Points outside this band are statistically unusual — not just bad/good days, but genuinely anomalous.
 </Alert>
 
 <DataTable data={anomaly_summary} rows=10 />
@@ -231,5 +279,65 @@ Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak deman
     subtitle="Revenue intensity by day across the date range"
     valueFmt="num0"
 />
+
+## Monthly Growth: MoM and YoY
+
+<Alert status="info">
+Month-over-month (MoM) growth captures short-term momentum shifts. 
+Year-over-year (YoY) growth eliminates seasonality and reveals true underlying trajectory.
+</Alert>
+
+<Alert status="positive">
+<b>Business best practice:</b> Always compare YoY for seasonal businesses. A "bad" month might just be seasonally weak — 
+YoY tells you if performance is actually declining relative to the same period last year.
+</Alert>
+
+<BarChart
+    data={yoy_monthly_growth}
+    x=month_start
+    y=yoy_growth
+    title="Year-over-Year Revenue Growth"
+    subtitle="Same month vs prior year — eliminates seasonality"
+    yAxisTitle="YoY Growth"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
+</BarChart>
+
+<BarChart
+    data={yoy_monthly_growth}
+    x=month_start
+    y=mom_growth
+    title="Month-over-Month Revenue Growth"
+    subtitle="Sequential monthly change — captures momentum"
+    yAxisTitle="MoM Growth"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
+</BarChart>
+
+## Cancellation Rate Trend
+
+<Alert status="warning">
+<b>~10% of order lines are cancelled</b> on average — this is lost revenue before it even ships. 
+Cancellation rate is a leading indicator of inventory availability, pricing errors, or checkout friction.
+</Alert>
+
+<Alert status="positive">
+Action: If cancellation spikes correlate with stockout days, it's an inventory signal. 
+If it correlates with deep discounts, it's a pricing/promo code issue.
+</Alert>
+
+<LineChart
+    data={yoy_monthly_growth}
+    x=month_start
+    y=cancellation_rate
+    title="Monthly Cancellation Rate"
+    subtitle="Share of order lines cancelled before fulfillment"
+    yAxisTitle="Cancellation Rate"
+    yFmt="0.0%"
+>
+    <ReferenceLine y=0.10 label="10% Alert" hideValue=true color=warning/>
+</LineChart>
 
 <DataTable data={daily_series} rows=10/>
