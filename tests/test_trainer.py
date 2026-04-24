@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from datathon.modeling.cv import ExpandingWindowCV
+from datathon.modeling.forecasters.catboost import CatBoostForecaster
 from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
 from datathon.modeling.forecasters.xgboost import XGBoostForecaster
 from datathon.modeling.recursive import (
@@ -32,15 +33,20 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
             "is_weekend": (dates.dayofweek >= 5).astype(int),
             "day_of_month": dates.day,
             "day_of_year": dates.dayofyear,
+            "week_of_year": dates.isocalendar().week.astype(int),
             "days_to_month_end": 1,
+            "days_to_quarter_end": 10,
             "is_month_start": 0,
             "is_month_end": 0,
+            "is_quarter_end": 0,
             "month_sin": np.sin(2 * np.pi * dates.month / 12),
             "month_cos": np.cos(2 * np.pi * dates.month / 12),
             "day_of_week_sin": np.sin(2 * np.pi * dates.dayofweek / 7),
             "day_of_week_cos": np.cos(2 * np.pi * dates.dayofweek / 7),
             "day_of_year_sin": np.sin(2 * np.pi * dates.dayofyear / 365),
             "day_of_year_cos": np.cos(2 * np.pi * dates.dayofyear / 365),
+            "week_of_year_sin": np.sin(2 * np.pi * dates.isocalendar().week / 52),
+            "week_of_year_cos": np.cos(2 * np.pi * dates.isocalendar().week / 52),
             "tet_date": pd.Timestamp("2023-01-22"),
             "days_to_tet": (pd.Timestamp("2023-01-22") - dates).days,
             "is_pre_tet_rush": 0,
@@ -56,6 +62,8 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     )
     # Add lag / rolling placeholders required by recursive forecast
     df["lag_1d_revenue"] = pd.Series(revenue).shift(1)
+    df["lag_2d_revenue"] = pd.Series(revenue).shift(2)
+    df["lag_3d_revenue"] = pd.Series(revenue).shift(3)
     df["lag_7d_revenue"] = pd.Series(revenue).shift(7)
     df["lag_14d_revenue"] = pd.Series(revenue).shift(14)
     df["lag_28d_revenue"] = pd.Series(revenue).shift(28)
@@ -63,6 +71,8 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     df["lag_8d_revenue"] = pd.Series(revenue).shift(8)
     df["lag_29d_revenue"] = pd.Series(revenue).shift(29)
     df["lag_1d_cogs"] = pd.Series(cogs).shift(1)
+    df["lag_7d_cogs"] = pd.Series(cogs).shift(7)
+    df["lag_28d_cogs"] = pd.Series(cogs).shift(28)
     df["lag_365d_cogs"] = pd.Series(cogs).shift(365)
     df["lag_1d_rev_wow_growth"] = (
         df["lag_1d_revenue"] / df["lag_8d_revenue"].replace(0, np.nan) - 1
@@ -73,6 +83,9 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     df["lag_1d_rev_yoy_growth"] = (
         df["lag_1d_revenue"] / df["lag_365d_revenue"].replace(0, np.nan) - 1
     ).fillna(0.0)
+    df["rev_wow_acceleration"] = df["lag_1d_rev_wow_growth"].diff().fillna(0.0)
+    df["rev_mom_acceleration"] = df["lag_1d_rev_mom_growth"].diff().fillna(0.0)
+    df["rev_yoy_acceleration"] = df["lag_1d_rev_yoy_growth"].diff().fillna(0.0)
     df["roll_mean_7d_revenue"] = df["lag_1d_revenue"].rolling(window=7, min_periods=1).mean()
     df["roll_mean_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=1).mean()
     df["roll_mean_365d_revenue"] = df["lag_1d_revenue"].rolling(window=365, min_periods=1).mean()
@@ -80,6 +93,15 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     df["roll_median_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=1).median()
     df["roll_std_7d_revenue"] = df["lag_1d_revenue"].rolling(window=7, min_periods=2).std()
     df["roll_std_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=2).std()
+    df["roll_std_365d_revenue"] = df["lag_1d_revenue"].rolling(window=365, min_periods=2).std()
+    df["roll_mean_7d_cogs"] = df["lag_1d_cogs"].rolling(window=7, min_periods=1).mean()
+    df["roll_mean_28d_cogs"] = df["lag_1d_cogs"].rolling(window=28, min_periods=1).mean()
+    df["ema_7d_revenue"] = df["lag_1d_revenue"].ewm(span=7, min_periods=1).mean()
+    df["ema_28d_revenue"] = df["lag_1d_revenue"].ewm(span=28, min_periods=1).mean()
+    df["revenue_baseline"] = df["lag_365d_revenue"]
+    df["cogs_baseline"] = df["lag_365d_cogs"]
+    df["revenue_residual"] = df["revenue"] - df["revenue_baseline"]
+    df["cogs_residual"] = df["cogs"] - df["cogs_baseline"]
     return df
 
 
@@ -110,6 +132,7 @@ def test_prepare_future_frame_has_calendar_features() -> None:
     [
         (LightGBMForecaster, {"verbose": -1}),
         (XGBoostForecaster, {"verbosity": 0}),
+        (CatBoostForecaster, {"iterations": 10, "verbose": False}),
     ],
 )
 def test_recursive_forecast_produces_non_negative_predictions(forecaster_cls, kwargs) -> None:
@@ -132,6 +155,7 @@ def test_recursive_forecast_produces_non_negative_predictions(forecaster_cls, kw
     [
         (LightGBMForecaster, {"verbose": -1}),
         (XGBoostForecaster, {"verbosity": 0}),
+        (CatBoostForecaster, {"iterations": 10, "verbose": False}),
     ],
 )
 def test_trainer_cv_runs_without_error(forecaster_cls, kwargs) -> None:
@@ -154,6 +178,28 @@ def test_trainer_cv_runs_without_error(forecaster_cls, kwargs) -> None:
     [
         (LightGBMForecaster, {"verbose": -1}),
         (XGBoostForecaster, {"verbosity": 0}),
+        (CatBoostForecaster, {"iterations": 10, "verbose": False}),
+    ],
+)
+def test_trainer_cv_returns_predictions_when_asked(forecaster_cls, kwargs) -> None:
+    df = _make_synthetic_df(n=100)
+    forecaster = forecaster_cls(**kwargs)
+    trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV(n_folds=2, horizon_days=10))
+    results, preds = trainer.run_cv(df, return_predictions=True)
+
+    assert isinstance(preds, list)
+    assert len(preds) == 2
+    for fold_pred in preds:
+        assert list(fold_pred.columns) == ["date", "revenue_pred", "cogs_pred"]
+        assert len(fold_pred) == 10
+
+
+@pytest.mark.parametrize(
+    "forecaster_cls,kwargs",
+    [
+        (LightGBMForecaster, {"verbose": -1}),
+        (XGBoostForecaster, {"verbosity": 0}),
+        (CatBoostForecaster, {"iterations": 10, "verbose": False}),
     ],
 )
 def test_trainer_save_and_load_artifacts(forecaster_cls, kwargs, tmp_path) -> None:
@@ -166,7 +212,9 @@ def test_trainer_save_and_load_artifacts(forecaster_cls, kwargs, tmp_path) -> No
     model_type_name = forecaster_cls.__name__.lower().replace("forecaster", "")
     Trainer.save_artifacts(model_dir, forecaster_fitted, feature_cols, model_type=model_type_name)
 
-    loaded_forecaster, loaded_features, loaded_type, _cogs_col = Trainer.load_artifacts(model_dir)
+    loaded_forecaster, loaded_features, loaded_type, _cogs_col, _residual = Trainer.load_artifacts(
+        model_dir
+    )
     assert loaded_features == feature_cols
     X = df[feature_cols].iloc[[-1]]
     assert loaded_forecaster.predict(X)[0][0] == pytest.approx(forecaster_fitted.predict(X)[0][0])
