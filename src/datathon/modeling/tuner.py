@@ -14,7 +14,6 @@ from datathon.modeling.factory import build_forecaster
 from datathon.modeling.recursive import feature_columns, recursive_forecast
 from datathon.utils.config import load_modeling_config
 
-# Optuna verbosity is noisy; silence it unless explicitly requested.
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
@@ -104,8 +103,8 @@ def _make_objective(
     model_type: str,
     base_config: dict[str, Any],
     cogs_column: str,
-    n_folds: int = 3,
-    horizon_days: int = 30,
+    n_folds: int = 2,
+    horizon_days: int = 548,
 ) -> callable:
     """Build an Optuna objective that minimises total MAE with per-fold pruning."""
     cogs_is_ratio = cogs_column == "cogs_ratio"
@@ -136,6 +135,12 @@ def _make_objective(
                 train_df[cogs_column],
                 eval_set=(val_df[cols], val_df["revenue"], val_df[cogs_column]),
             )
+
+            rev_iter, cogs_iter = forecaster.best_iterations()
+            if rev_iter is not None:
+                trial.set_user_attr("best_iteration_rev", rev_iter)
+            if cogs_iter is not None:
+                trial.set_user_attr("best_iteration_cogs", cogs_iter)
 
             pred = recursive_forecast(
                 forecaster,
@@ -179,8 +184,8 @@ def run_study(
     model_type: str,
     n_trials: int = 30,
     timeout: int | None = None,
-    n_folds: int = 3,
-    horizon_days: int = 30,
+    n_folds: int = 2,
+    horizon_days: int = 548,
     study_name: str | None = None,
     storage: str | None = None,
     seed: int = 42,
@@ -242,8 +247,22 @@ def run_study(
         callbacks=[stop_callback],
     )
 
-    best_params = dict(study.best_params)
-    best_value = float(study.best_value)
+    best_trial = study.best_trial
+    best_params = dict(best_trial.params)
+    best_value = float(best_trial.value)
+
+    rev_iter = best_trial.user_attrs.get("best_iteration_rev")
+    cogs_iter = best_trial.user_attrs.get("best_iteration_cogs")
+
+    # Use the more conservative (larger) ceiling so neither model is cut short.
+    best_iter = None
+    if rev_iter is not None:
+        best_iter = int(rev_iter)
+    if cogs_iter is not None:
+        best_iter = int(cogs_iter) if best_iter is None else max(best_iter, int(cogs_iter))
+    if best_iter is not None:
+        key = "iterations" if model_type == "catboost" else "n_estimators"
+        best_params[key] = best_iter
 
     # Merge fixed params so the returned config is self-contained.
     best_params = _inject_fixed_params(best_params, config, model_type)

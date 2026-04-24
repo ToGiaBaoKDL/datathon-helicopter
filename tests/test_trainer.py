@@ -9,7 +9,6 @@ from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
 from datathon.modeling.forecasters.xgboost import XGBoostForecaster
 from datathon.modeling.recursive import (
     _prepare_future_frame,
-    _recompute_target_features,
     feature_columns,
     recursive_forecast,
 )
@@ -19,17 +18,20 @@ from datathon.modeling.trainer import Trainer
 def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     dates = pd.date_range("2023-01-01", periods=n, freq="D")
-    return pd.DataFrame(
+    revenue = rng.random(n) * 1_000_000
+    cogs = rng.random(n) * 800_000
+    df = pd.DataFrame(
         {
             "sales_date": dates,
-            "revenue": rng.random(n) * 1_000_000,
-            "cogs": rng.random(n) * 800_000,
+            "revenue": revenue,
+            "cogs": cogs,
             "year": dates.year,
             "month": dates.month,
             "quarter": dates.quarter,
             "day_of_week": dates.dayofweek,
             "is_weekend": (dates.dayofweek >= 5).astype(int),
             "day_of_month": dates.day,
+            "day_of_year": dates.dayofyear,
             "days_to_month_end": 1,
             "is_month_start": 0,
             "is_month_end": 0,
@@ -37,6 +39,8 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
             "month_cos": np.cos(2 * np.pi * dates.month / 12),
             "day_of_week_sin": np.sin(2 * np.pi * dates.dayofweek / 7),
             "day_of_week_cos": np.cos(2 * np.pi * dates.dayofweek / 7),
+            "day_of_year_sin": np.sin(2 * np.pi * dates.dayofyear / 365),
+            "day_of_year_cos": np.cos(2 * np.pi * dates.dayofyear / 365),
             "tet_date": pd.Timestamp("2023-01-22"),
             "days_to_tet": (pd.Timestamp("2023-01-22") - dates).days,
             "is_pre_tet_rush": 0,
@@ -50,6 +54,33 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
             "sessions": rng.integers(100, 1000, size=n),
         }
     )
+    # Add lag / rolling placeholders required by recursive forecast
+    df["lag_1d_revenue"] = pd.Series(revenue).shift(1)
+    df["lag_7d_revenue"] = pd.Series(revenue).shift(7)
+    df["lag_14d_revenue"] = pd.Series(revenue).shift(14)
+    df["lag_28d_revenue"] = pd.Series(revenue).shift(28)
+    df["lag_365d_revenue"] = pd.Series(revenue).shift(365)
+    df["lag_8d_revenue"] = pd.Series(revenue).shift(8)
+    df["lag_29d_revenue"] = pd.Series(revenue).shift(29)
+    df["lag_1d_cogs"] = pd.Series(cogs).shift(1)
+    df["lag_365d_cogs"] = pd.Series(cogs).shift(365)
+    df["lag_1d_rev_wow_growth"] = (
+        df["lag_1d_revenue"] / df["lag_8d_revenue"].replace(0, np.nan) - 1
+    ).fillna(0.0)
+    df["lag_1d_rev_mom_growth"] = (
+        df["lag_1d_revenue"] / df["lag_29d_revenue"].replace(0, np.nan) - 1
+    ).fillna(0.0)
+    df["lag_1d_rev_yoy_growth"] = (
+        df["lag_1d_revenue"] / df["lag_365d_revenue"].replace(0, np.nan) - 1
+    ).fillna(0.0)
+    df["roll_mean_7d_revenue"] = df["lag_1d_revenue"].rolling(window=7, min_periods=1).mean()
+    df["roll_mean_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=1).mean()
+    df["roll_mean_365d_revenue"] = df["lag_1d_revenue"].rolling(window=365, min_periods=1).mean()
+    df["roll_median_7d_revenue"] = df["lag_1d_revenue"].rolling(window=7, min_periods=1).median()
+    df["roll_median_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=1).median()
+    df["roll_std_7d_revenue"] = df["lag_1d_revenue"].rolling(window=7, min_periods=2).std()
+    df["roll_std_28d_revenue"] = df["lag_1d_revenue"].rolling(window=28, min_periods=2).std()
+    return df
 
 
 def test_expanding_window_cv_yields_correct_splits() -> None:
@@ -61,15 +92,6 @@ def test_expanding_window_cv_yields_correct_splits() -> None:
     for _fold, train_idx, val_idx in splits:
         assert len(val_idx) == 10
         assert max(train_idx) < min(val_idx)
-
-
-def test_recompute_target_features_populates_lags() -> None:
-    df = _make_synthetic_df(n=10)
-    df["lag_1d_revenue"] = np.nan
-    result = _recompute_target_features(df)
-
-    assert pd.isna(result.loc[0, "lag_1d_revenue"])
-    assert result.loc[1, "lag_1d_revenue"] == df.loc[0, "revenue"]
 
 
 def test_prepare_future_frame_has_calendar_features() -> None:
@@ -92,7 +114,6 @@ def test_prepare_future_frame_has_calendar_features() -> None:
 )
 def test_recursive_forecast_produces_non_negative_predictions(forecaster_cls, kwargs) -> None:
     history = _make_synthetic_df(n=60)
-    history = _recompute_target_features(history)
     scaffold = pd.DataFrame({"date": pd.date_range("2023-03-02", periods=5, freq="D")})
 
     forecaster = forecaster_cls(**kwargs)
@@ -115,7 +136,6 @@ def test_recursive_forecast_produces_non_negative_predictions(forecaster_cls, kw
 )
 def test_trainer_cv_runs_without_error(forecaster_cls, kwargs) -> None:
     df = _make_synthetic_df(n=100)
-    df = _recompute_target_features(df)
     forecaster = forecaster_cls(**kwargs)
     trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV(n_folds=2, horizon_days=10))
     results = trainer.run_cv(df)
@@ -138,7 +158,6 @@ def test_trainer_cv_runs_without_error(forecaster_cls, kwargs) -> None:
 )
 def test_trainer_save_and_load_artifacts(forecaster_cls, kwargs, tmp_path) -> None:
     df = _make_synthetic_df(n=50)
-    df = _recompute_target_features(df)
     forecaster = forecaster_cls(**kwargs)
     trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV(n_folds=2, horizon_days=5))
     forecaster_fitted, feature_cols = trainer.train_final(df)

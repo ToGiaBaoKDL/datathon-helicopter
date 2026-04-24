@@ -23,9 +23,12 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
 
         if eval_set is not None:
             X_val, y_rev_val, y_cogs_val = eval_set
-            callback = xgb.callback.EarlyStopping(rounds=self._early_stopping_rounds)
-            rev_kwargs["callbacks"] = [callback]
-            cogs_kwargs["callbacks"] = [callback]
+            rev_kwargs["callbacks"] = [
+                xgb.callback.EarlyStopping(rounds=self._early_stopping_rounds)
+            ]
+            cogs_kwargs["callbacks"] = [
+                xgb.callback.EarlyStopping(rounds=self._early_stopping_rounds)
+            ]
             fit_rev = {"eval_set": [(X_val, y_rev_val)], "verbose": False}
             fit_cogs = {"eval_set": [(X_val, y_cogs_val)], "verbose": False}
         else:
@@ -37,3 +40,12 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
 
         self.model_rev.fit(X, y_rev, **fit_rev)
         self.model_cogs.fit(X, y_cogs, **fit_cogs)
+
+    def best_iterations(self) -> tuple[int | None, int | None]:
+        rev_iter = None
+        cogs_iter = None
+        if self.model_rev is not None and hasattr(self.model_rev, "best_iteration"):
+            rev_iter = int(self.model_rev.best_iteration)
+        if self.model_cogs is not None and hasattr(self.model_cogs, "best_iteration"):
+            cogs_iter = int(self.model_cogs.best_iteration)
+        return rev_iter, cogs_iter

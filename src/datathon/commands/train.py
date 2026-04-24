@@ -51,8 +51,8 @@ def parse_args(raw_args: list[str]) -> TrainOptions:
         )
     )
 
-    n_folds = int(take_option(args, "--n-folds", default="3"))
-    horizon_days = int(take_option(args, "--horizon-days", default="30"))
+    n_folds = int(take_option(args, "--n-folds", default="2"))
+    horizon_days = int(take_option(args, "--horizon-days", default="548"))
 
     config_path_raw = take_option(args, "--config", default="")
     config_path = Path(config_path_raw) if config_path_raw else None

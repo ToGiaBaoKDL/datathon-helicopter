@@ -38,3 +38,12 @@ class CatBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
 
         self.model_rev.fit(X, y_rev, **fit_rev)
         self.model_cogs.fit(X, y_cogs, **fit_cogs)
+
+    def best_iterations(self) -> tuple[int | None, int | None]:
+        rev_iter = None
+        cogs_iter = None
+        if self.model_rev is not None and hasattr(self.model_rev, "get_best_iteration"):
+            rev_iter = int(self.model_rev.get_best_iteration())
+        if self.model_cogs is not None and hasattr(self.model_cogs, "get_best_iteration"):
+            cogs_iter = int(self.model_cogs.get_best_iteration())
+        return rev_iter, cogs_iter

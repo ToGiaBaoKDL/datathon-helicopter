@@ -22,7 +22,6 @@ class EnsembleOptions:
     weights: list[float] | None
     model_dir: Path
     output_path: Path
-    config_path: Path | None
 
 
 def parse_args(raw_args: list[str]) -> EnsembleOptions:
@@ -54,8 +53,6 @@ def parse_args(raw_args: list[str]) -> EnsembleOptions:
             default=str(submissions_dir() / "ensemble_submission.csv"),
         )
     )
-    config_path_raw = take_option(args, "--config", default="")
-    config_path = Path(config_path_raw) if config_path_raw else None
 
     ensure_no_unknown_args(args)
     return EnsembleOptions(
@@ -64,7 +61,6 @@ def parse_args(raw_args: list[str]) -> EnsembleOptions:
         weights=weights,
         model_dir=model_dir,
         output_path=output_path,
-        config_path=config_path,
     )
 
 
@@ -73,14 +69,12 @@ def print_help() -> None:
     console.print(
         "[dim]Usage:[/dim] datathon ensemble [--model-types <t1,t2,...>] "
         "[--weights <w1,w2,...>] [--warehouse <path>] [--model-dir <path>] "
-        "[--output-path <path>] [--config <path>]"
+        "[--output-path <path>]"
     )
     console.print(
         "Load multiple trained models, average their predictions (optionally weighted), "
         "and generate a submission.\n"
-        "Default models: lightgbm,xgboost,catboost | Default weights: equal\n"
-        "[dim]--config[/dim]   Optional modeling config path "
-        "(defaults to configs/modeling.yaml)."
+        "Default models: lightgbm,xgboost,catboost | Default weights: equal"
     )
 
 

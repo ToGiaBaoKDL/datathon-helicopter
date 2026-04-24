@@ -18,8 +18,8 @@ with base as (
         cos(2 * pi() * month / 12) as month_cos,
         sin(2 * pi() * day_of_week / 7) as day_of_week_sin,
         cos(2 * pi() * day_of_week / 7) as day_of_week_cos,
-        sin(2 * pi() * day_of_year / case when year % 4 = 0 then 366 else 365 end) as day_of_year_sin,
-        cos(2 * pi() * day_of_year / case when year % 4 = 0 then 366 else 365 end) as day_of_year_cos,
+        sin(2 * pi() * day_of_year / case when year % 4 = 0 and (year % 100 != 0 or year % 400 = 0) then 366 else 365 end) as day_of_year_sin,
+        cos(2 * pi() * day_of_year / case when year % 4 = 0 and (year % 100 != 0 or year % 400 = 0) then 366 else 365 end) as day_of_year_cos,
         -- Vietnamese public holidays
         case when month = 4 and day_of_month = 30 then 1 else 0 end as is_reunification_day,
         case when month = 5 and day_of_month = 1 then 1 else 0 end as is_labor_day,

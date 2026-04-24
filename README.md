@@ -56,7 +56,7 @@ for p in sorted(glob.glob('configs/tuned/*.yaml')):
 pathlib.Path('configs/tuned/all_models.yaml').write_text(yaml.dump(base, sort_keys=False, allow_unicode=True))
 "
 
-uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
+uv run datathon compare-models --config configs/tuned/all_models.yaml
 uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.csv
 ```
 
@@ -81,7 +81,7 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 │   └── shap/                 # SHAP plots output (auto-generated)
 ├── src/datathon/
 │   ├── cli.py                # Entry point
-│   ├── commands/             # CLI commands (rich output)
+│   ├── commands/             # CLI commands
 │   ├── modeling/             # Forecasters, CV, trainer, tuner, SHAP explainer
 │   └── utils/                # Config, data loaders, DuckDB I/O
 ├── tests/                    # pytest suite
@@ -99,7 +99,7 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 | `datathon tune --model-type catboost --n-trials 30 --patience 5` | Optuna hyperparameter search with early stopping |
 | `datathon train --mode evaluate --model-type lightgbm` | Expanding-window CV vs seasonal naive |
 | `datathon train --mode train-final --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Train final model with tuned params |
-| `datathon predict --model-type lightgbm --config configs/tuned/lightgbm.yaml` | Generate submission from saved model |
+| `datathon predict --model-type lightgbm` | Generate submission from saved model |
 | `datathon compare-models --config configs/tuned/all_models.yaml` | CV all models + ensemble, pick true winner, train finals, submit |
 | `datathon ensemble --model-types lightgbm,xgboost --weights 0.5,0.5` | Weighted ensemble from trained models |
 | `datathon explain --model-type lightgbm` | Generate SHAP summary & bar plots |
@@ -143,7 +143,7 @@ for p in sorted(glob.glob('configs/tuned/*.yaml')):
 pathlib.Path('configs/tuned/all_models.yaml').write_text(yaml.dump(base, sort_keys=False, allow_unicode=True))
 "
 
-uv run datathon compare-models --config configs/tuned/all_models.yaml --n-folds 3 --horizon-days 30
+uv run datathon compare-models --config configs/tuned/all_models.yaml
 ```
 
 > **Why merge?** `compare-models` only accepts a single `--config`. Each `tune` run emits a delta for one model. Merging them ensures every model uses its own tuned params during the comparison.
@@ -212,7 +212,7 @@ Fold 3: [train======================|val===]
 
 ### Two-Stage COGS
 
-When `cogs_target: ratio` is set in the config, the COGS model predicts `cogs / revenue` instead of absolute COGS. The ratio is clamped to `[0, 1]` and converted back to absolute values (`revenue * ratio`) during recursive forecast. This leverages the strong revenue-COGS correlation (≈0.976) for more stable predictions.
+When `cogs_target: ratio` is set in the config, the COGS model predicts `cogs / revenue` instead of absolute COGS. The ratio is clamped to `[0, 2]` and converted back to absolute values (`revenue * ratio`) during recursive forecast. This leverages the strong revenue-COGS correlation (≈0.976) while allowing negative-margin scenarios.
 
 ---
 

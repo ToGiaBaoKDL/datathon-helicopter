@@ -33,13 +33,14 @@ class CompareOptions:
     model_dir: Path
     output_path: Path
     config_path: Path | None
+    force: bool
 
 
 def parse_args(raw_args: list[str]) -> CompareOptions:
     args = list(raw_args)
     warehouse = Path(take_option(args, "--warehouse", default=str(warehouse_path())))
-    n_folds = int(take_option(args, "--n-folds", default="3"))
-    horizon_days = int(take_option(args, "--horizon-days", default="30"))
+    n_folds = int(take_option(args, "--n-folds", default="2"))
+    horizon_days = int(take_option(args, "--horizon-days", default="548"))
     model_dir = Path(take_option(args, "--model-dir", default=str(models_dir())))
     output_path = Path(
         take_option(
@@ -50,6 +51,7 @@ def parse_args(raw_args: list[str]) -> CompareOptions:
     )
     config_path_raw = take_option(args, "--config", default="")
     config_path = Path(config_path_raw) if config_path_raw else None
+    force = take_option(args, "--force", default="false").lower() in ("true", "1", "yes")
 
     ensure_no_unknown_args(args)
     return CompareOptions(
@@ -59,6 +61,7 @@ def parse_args(raw_args: list[str]) -> CompareOptions:
         model_dir=model_dir,
         output_path=output_path,
         config_path=config_path,
+        force=force,
     )
 
 
@@ -67,7 +70,7 @@ def print_help() -> None:
     console.print(
         "[dim]Usage:[/dim] datathon compare-models [--warehouse <path>] "
         "[--n-folds <int>] [--horizon-days <int>] [--model-dir <path>] "
-        "[--output-path <path>] [--config <path>]"
+        "[--output-path <path>] [--config <path>] [--force]"
     )
     console.print(
         "Runs expanding-window CV for every registered model type, "
@@ -75,7 +78,8 @@ def print_help() -> None:
         "picks the winner by lowest average MAE, trains finals, "
         "and generates a submission from the true winner.\n"
         "[dim]--config[/dim]   Optional modeling config path "
-        "(defaults to configs/modeling.yaml)."
+        "(defaults to configs/modeling.yaml).\n"
+        "[dim]--force[/dim]    Retrain final models even if artifacts already exist."
     )
 
 
@@ -214,7 +218,7 @@ def run(options: CompareOptions) -> None:
     available = list_forecasters()
     for model_type in available:
         model_dir = options.model_dir / model_type
-        if model_dir.exists():
+        if model_dir.exists() and not options.force:
             console.print(f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]")
             continue
         forecaster = build_forecaster(model_type, config)

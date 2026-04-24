@@ -40,3 +40,12 @@ class LightGBMForecaster(_DualTargetForecasterMixin, BaseForecaster):
 
         self.model_rev.fit(X, y_rev, **fit_rev)
         self.model_cogs.fit(X, y_cogs, **fit_cogs)
+
+    def best_iterations(self) -> tuple[int | None, int | None]:
+        rev_iter = None
+        cogs_iter = None
+        if self.model_rev is not None and hasattr(self.model_rev, "best_iteration_"):
+            rev_iter = int(self.model_rev.best_iteration_)
+        if self.model_cogs is not None and hasattr(self.model_cogs, "best_iteration_"):
+            cogs_iter = int(self.model_cogs.best_iteration_)
+        return rev_iter, cogs_iter

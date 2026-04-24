@@ -235,10 +235,10 @@ Architecture supports pluggable forecasters via `BaseForecaster` abstraction.
   Hyperparameters injected into forecaster via `**model_cfg`. No hardcode in Python.
 
 **CLI layer:**
-- `datathon train --mode evaluate --model-type lightgbm --n-folds 5 --horizon-days 30`
+- `datathon train --mode evaluate --model-type lightgbm`
 - `datathon train --mode train-final --model-type lightgbm`
 - `datathon predict --model-type lightgbm --output-path <path>`
-- `datathon compare-models --n-folds 3 --horizon-days 30` — runs CV for **all** registered model types, prints comparison table, trains final winner, generates submission.
+- `datathon compare-models` — runs CV for **all** registered model types, prints comparison table, trains final winner, generates submission.
 - `--model-type` validated against registry. Artifacts saved to `models/<model_type>/`.
 
 **Artifacts structure:**
@@ -278,7 +278,7 @@ models/lightgbm/
 - `datathon train --mode evaluate`: Works.
 - `datathon train --mode train-final`: Saves artifacts correctly.
 - `datathon predict --model-type lightgbm --output-path data/submissions/lightgbm_submission.csv`: Generates valid submission.
-- `datathon compare-models --n-folds 2 --horizon-days 30`: Evaluates all models, picks winner, trains final, generates submission.
+- `datathon compare-models`: Evaluates all models, picks winner, trains final, generates submission.
 - `datathon explain --model-type lightgbm`: Generates SHAP plots successfully.
 - `datathon submit-kaggle --dry-run`: Validates successfully.
 - `datathon ensemble --model-types lightgbm,xgboost`: Generates ensemble submission successfully.
@@ -325,6 +325,72 @@ models/lightgbm/
 - **Ensemble wins CV** — submission generated from ensemble (`data/submissions/tuned_best_submission.csv`).
 - Dry-run validation: **passed**.
 
+### 25. Critical Modeling Pipeline Fix — Long-Horizon Forecast (548 days)
+**Problem identified**: The pipeline was built around a 30-day CV horizon, but the Kaggle test period is **548 days** (2023-01-01 → 2024-07-01). Recursive forecast forward-filled all exogenous features (web traffic, inventory, orders) from 2022-12-31 for the entire 1.5-year window, causing catastrophic error propagation.
+
+**Root causes:**
+1. **Horizon mismatch:** CV validated on 30 days; real task is 548 days.
+2. **Future-unknown exogenous features:** `sessions`, `order_count`, `inventory` lags, etc. were frozen for 548 days.
+3. **Missing yearly seasonality:** No `lag_365d_revenue`, `day_of_year_sin/cos`, or strong calendar features to capture the dominant yearly pattern.
+
+**Fixes applied:**
+- **`dbt/models/marts/finance/enriched/mart_forecast_daily_features.sql`**:
+  - **Removed** all future-unknown exogenous features: `order_count`, `units_sold`, `sessions`, `unique_visitors`, `page_views`, `avg_bounce_rate`, `avg_session_duration_sec`, all `lag_1m_*` inventory columns, and their rolling means.
+  - **Added** `lag_365d_revenue`, `lag_365d_cogs`, `roll_mean_365d_revenue`.
+  - **Added** `day_of_year`, `day_of_year_sin`, `day_of_year_cos`.
+  - **Added** `lag_1d_rev_yoy_growth`.
+- **`src/datathon/modeling/recursive.py`**:
+  - Updated `CALENDAR_FEATURES` and `_TARGET_DERIVED` to mirror new SQL features.
+  - Added `lag_365d_*`, `roll_mean_365d_*`, `day_of_year_sin/cos` recompute logic.
+  - Softened COGS ratio clamp from `[0, 1]` → `[0, 2]`.
+- **`configs/modeling.yaml`**: Switched `cogs_target` from `ratio` to `absolute`.
+- **`src/datathon/commands/train.py` / `compare_models.py`**: Changed default `horizon_days` from **30 → 365** and `n_folds` from **3 → 2**.
+**Next steps:**
+- Train residual model: `target = actual - yoy_baseline` using the cleaned feature set, then `final = yoy + residual_pred`.
+- Retune with `horizon_days=548` so hyperparameters optimize the real metric.
+
+### 26. Modeling Pipeline Code Review & Hardening
+**Trigger:** User requested a full review of feature engineering and training logic after discovering that `sample_submission.csv` had been mistakenly treated as ground truth.
+
+**Critical bug found & fixed:**
+- **`src/datathon/modeling/forecasters/xgboost.py`**: XGBoost reused a single `EarlyStopping` callback instance for both revenue and COGS models. Because the callback is stateful, the second fit saw stale state. **Fixed** by creating two separate callback instances.
+
+**Major performance fix:**
+- **`src/datathon/modeling/recursive.py`**: The recursive loop recomputed rolling windows on the entire `combined` DataFrame (4,380 rows) for all 548 prediction steps → O(n²). **Refactored** into `_update_row_features(combined, idx)` which incrementally updates only the current row, reducing complexity to O(n × window_size).
+
+**Medium fixes:**
+- **Leap-year `day_of_year`**: SQL and Python both used a fixed denominator of 365 for `sin/cos` transforms. **Fixed** to use 366 for leap years.
+- **NaN growth ratios**: `lag_1d_rev_*_growth` produced NaN for the first 365 rows. **Fixed** with `.fillna(0.0)`.
+- **`load_scaffold`**: Selected placeholder `revenue`/`cogs` columns from the sample submission, causing confusion. **Fixed** to select `date` only.
+- **`load_modeling_data`**: Added explicit `pd.to_datetime` on `sales_date` and empty-DataFrame guard.
+- **`_load_tet_dates`**: Added `@functools.lru_cache(maxsize=1)` to avoid querying DuckDB on every prediction call.
+
+**Low / robustness fixes:**
+- **`tuner.py`**: Now stores per-target best iterations (`best_iteration_rev`, `best_iteration_cogs`) in trial user attrs, but still uses `max(...)` as the conservative ceiling injected into the config.
+
+**Validation after fixes:**
+- `dbt build`: **172 / 172 PASS**.
+- `pytest`: **11 passed**.
+- `ruff check .`: All checks passed.
+- `datathon train --mode train-final` + `datathon predict`: successful.
+
+### 27. CLI & Defaults Cleanup
+**Removed redundant / confusing commands:**
+- **`export-model-data`**: Removed. Parquet export was unused in the main flow.
+- **`evaluate-local`**: Removed. The command name was misleading (sounded like model evaluation) and its CSV-vs-CSV comparison is a one-liner in pandas.
+
+**Horizon defaults aligned to real task (548 days):**
+- `datathon tune`, `train`, `compare-models`, and `tuner.py` defaults changed from `horizon_days=365` → **`548`**.
+- `n_folds` remains `2` (fast, still leaves ~3,284 training days per fold).
+- Rationale: The Kaggle test period is exactly 548 days (2023-01-01 → 2024-07-01). CV horizon should match the real forecast horizon so hyperparameters and ensemble weights optimize the correct metric.
+
+**Dead parameter cleanup:**
+- `predict.py` and `ensemble.py`: Removed unused `--config` flag (models are loaded from pickle, config is irrelevant at inference time).
+- `Makefile`: Removed `export-model-data` target; stripped explicit `--n-folds` / `--horizon-days` from `compare-models` and `predict-model` targets.
+
+**SQL leap-year fix:**
+- `mart_forecast_daily_features.sql`: `day_of_year_sin/cos` denominator now uses full Gregorian rule (`year % 4 = 0 and (year % 100 != 0 or year % 400 = 0)`) instead of naive `% 4`.
+
 ## Remaining Notes / Known Issues
 - Evidence pages still use `union all` unpivot patterns where needed; this is standard for Evidence component consumption and not duplicate business logic.
 - **Kaggle submission executed**: Ensemble (LightGBM + XGBoost) submitted successfully to datathon-2026-round-1.
@@ -341,8 +407,8 @@ uv run dbt build --project-dir dbt --profiles-dir dbt
 uv run datathon baseline --mode submit --output-path data/submissions/submission.csv
 uv run datathon train --mode train-final --model-type lightgbm
 uv run datathon predict --model-type lightgbm --output-path data/submissions/lightgbm_submission.csv
-uv run datathon compare-models --n-folds 2 --horizon-days 30
-uv run datathon ensemble --model-types lightgbm,xgboost
+uv run datathon compare-models
+uv run datathon ensemble --model-types lightgbm,xgboost,catboost
 uv run datathon explain --model-type lightgbm
 uv run datathon submit-kaggle --dry-run --file data/submissions/ensemble_submission.csv
 

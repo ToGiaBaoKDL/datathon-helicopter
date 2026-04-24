@@ -39,6 +39,14 @@ class BaseForecaster(ABC):
     def save(self, path: Path) -> None:
         """Persist the fitted forecaster to *path*."""
 
+    def best_iterations(self) -> tuple[int | None, int | None]:
+        """Return (best_iteration_rev, best_iteration_cogs) if available.
+
+        ``None`` means the underlying estimator does not expose a best
+        iteration (e.g. it was trained without early stopping).
+        """
+        return None, None
+
     @classmethod
     @abstractmethod
     def load(cls, path: Path) -> Self:

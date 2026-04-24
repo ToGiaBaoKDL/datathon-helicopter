@@ -21,7 +21,6 @@ class PredictOptions:
     model_type: str
     model_dir: Path
     output_path: Path
-    config_path: Path | None
 
 
 def parse_args(raw_args: list[str]) -> PredictOptions:
@@ -46,8 +45,6 @@ def parse_args(raw_args: list[str]) -> PredictOptions:
             default=str(submissions_dir() / f"{model_type}_submission.csv"),
         )
     )
-    config_path_raw = take_option(args, "--config", default="")
-    config_path = Path(config_path_raw) if config_path_raw else None
 
     ensure_no_unknown_args(args)
     return PredictOptions(
@@ -55,7 +52,6 @@ def parse_args(raw_args: list[str]) -> PredictOptions:
         model_type=model_type,
         model_dir=model_dir,
         output_path=output_path,
-        config_path=config_path,
     )
 
 
@@ -63,12 +59,9 @@ def print_help() -> None:
     console.print("[bold]predict[/bold]")
     console.print(
         "[dim]Usage:[/dim] datathon predict [--model-type <type>] "
-        "[--warehouse <path>] [--model-dir <path>] [--output-path <path>] "
-        "[--config <path>]"
+        "[--warehouse <path>] [--model-dir <path>] [--output-path <path>]"
     )
-    console.print(
-        "[dim]--config[/dim]   Optional modeling config path (defaults to configs/modeling.yaml)."
-    )
+    console.print("Load a trained model from disk and generate a submission CSV.")
 
 
 def run(options: PredictOptions) -> None:

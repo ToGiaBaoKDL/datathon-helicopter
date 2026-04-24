@@ -11,7 +11,6 @@ from datathon.commands import (
     download_data,
     ensemble,
     explain,
-    export_model_data,
     predict,
     submit_kaggle,
     train,
@@ -39,12 +38,6 @@ COMMANDS: dict[str, CommandSpec] = {
         parse_args=build_raw.parse_args,
         run=build_raw.run,
         print_help=build_raw.print_help,
-    ),
-    "export-model-data": CommandSpec(
-        description="Export modeling mart as Parquet dataset.",
-        parse_args=export_model_data.parse_args,
-        run=export_model_data.run,
-        print_help=export_model_data.print_help,
     ),
     "baseline": CommandSpec(
         description="Evaluate baseline or generate submission.",
