@@ -6,6 +6,9 @@ models:
       Daily feature mart for forecasting Revenue and COGS.
       Grain: one row per calendar day.
       Sources: stg_sales (targets), int_daily_commercial_signals (demand/commercial), int_inventory_monthly_signals (lagged inventory).
+      Important: order_count and line-level metrics include all order statuses (created, paid, shipped,
+      delivered, cancelled, returned) to match raw.sales revenue. 66,737 orders (~10%) have status
+      'created' or 'cancelled' and are included in these counts.
     columns:
       - name: sales_date
         description: Calendar date (date part only).
@@ -25,7 +28,7 @@ models:
       - name: is_weekend
         description: 1 if day_of_week is Sunday or Saturday.
       - name: order_count
-        description: Count of distinct orders placed.
+        description: Count of distinct orders placed on this day (all statuses including cancelled and created).
       - name: order_line_count
         description: Count of order lines.
       - name: units_sold
@@ -53,7 +56,7 @@ models:
       - name: avg_rating
         description: Average star rating (1-5).
       - name: sessions
-        description: Total web sessions. May be null for early dates (e.g., 2012) before web_traffic tracking began.
+        description: Total web sessions. Null for 181 days in 2012 because web_traffic tracking began on 2013-01-01.
       - name: unique_visitors
         description: Distinct web visitors.
       - name: page_views
@@ -287,7 +290,10 @@ models:
         description: Returns with reason = late_delivery.
 
   - name: mart_daily_marketing_kpis
-    description: Daily traffic and conversion KPIs for acquisition performance.
+    description: |
+      Daily traffic and conversion KPIs for acquisition performance.
+      Note: order_count includes all order statuses (created, paid, shipped, delivered, cancelled, returned).
+      The mart only covers dates from 2013-01-01 onward because web_traffic data does not exist for 2012.
     columns:
       - name: sales_date
         description: Calendar date.
@@ -304,7 +310,7 @@ models:
       - name: avg_session_duration_sec
         description: Average session duration in seconds.
       - name: order_count
-        description: Count of distinct orders (all statuses).
+        description: Count of distinct orders placed on this day (all statuses including cancelled and created).
       - name: purchasing_customer_count
         description: Count of distinct customers who placed orders.
       - name: session_to_order_rate
@@ -313,7 +319,10 @@ models:
         description: Page views / sessions (engagement depth).
 
   - name: mart_weekly_business_scorecard
-    description: Weekly business scorecard with growth and margin KPIs.
+    description: |
+      Weekly business scorecard with growth and margin KPIs.
+      Note: order_count aggregates daily counts that include all order statuses (created, paid, shipped,
+      delivered, cancelled, returned) to remain consistent with raw.sales revenue.
     columns:
       - name: week_start_date
         description: Start of week (Monday).
@@ -328,7 +337,7 @@ models:
       - name: gross_margin_rate
         description: Gross profit / revenue.
       - name: order_count
-        description: Sum of daily order counts.
+        description: Sum of daily order counts (includes cancelled and created orders).
       - name: sessions
         description: Sum of daily sessions.
       - name: session_to_order_rate
@@ -396,7 +405,11 @@ models:
         description: Sum of refunds in VND.
 
   - name: mart_daily_executive_kpis
-    description: Daily executive KPI mart for quick cross-functional monitoring. Combines commercial, fulfillment, inventory, returns, and marketing signals.
+    description: |
+      Daily executive KPI mart for quick cross-functional monitoring. Combines commercial, fulfillment,
+      inventory, returns, and marketing signals.
+      Note: order_count includes all order statuses (created, paid, shipped, delivered, cancelled, returned)
+      to match raw.sales revenue. For successful-order-only metrics, filter on order_status upstream.
     columns:
       - name: sales_date
         description: Calendar date.
@@ -411,7 +424,7 @@ models:
       - name: gross_margin_rate
         description: Gross profit / revenue.
       - name: order_count
-        description: Count of distinct orders.
+        description: Count of distinct orders on this day (all statuses including cancelled and created).
       - name: sessions
         description: Total web sessions.
       - name: unique_visitors
@@ -521,6 +534,9 @@ models:
     description: |
       Monthly cohort retention and value metrics from first-order month.
       Grain: (cohort_month, months_since_first_order).
+      Note: active_customer_count and total_orders include all order statuses (created, paid, shipped,
+      delivered, cancelled, returned). A customer who only places cancelled orders in a month is still
+      counted as active in that period.
     columns:
       - name: cohort_month
         description: First order month of customers in cohort.
@@ -532,12 +548,12 @@ models:
         description: Number of customers who first ordered in cohort_month.
         tests: [not_null]
       - name: active_customer_count
-        description: Cohort customers with at least one order this period.
+        description: Cohort customers with at least one order this period (all statuses including cancelled and created).
         tests: [not_null]
       - name: retention_rate
-        description: Active customers / cohort_size.
+        description: Active customers / cohort_size. Because active_customer_count includes customers with any order status, retention may be higher than a successful-order-only definition.
       - name: total_orders
-        description: Total orders placed by cohort in this period.
+        description: Total orders placed by cohort in this period (all statuses including cancelled and created).
       - name: total_revenue
         description: Total revenue generated by cohort in this period.
       - name: total_cogs
@@ -551,6 +567,8 @@ models:
     description: |
       Monthly cohort retention and value metrics segmented by acquisition channel and age group.
       Grain: (cohort_month, months_since_first_order, acquisition_channel, age_group).
+      Note: active_customer_count and total_orders include all order statuses (created, paid, shipped,
+      delivered, cancelled, returned).
     columns:
       - name: cohort_month
         description: First order month of customers in cohort.
@@ -568,12 +586,12 @@ models:
         description: Number of customers in this segment who first ordered in cohort_month.
         tests: [not_null]
       - name: active_customer_count
-        description: Cohort segment customers with at least one order this period.
+        description: Cohort segment customers with at least one order this period (all statuses including cancelled and created).
         tests: [not_null]
       - name: retention_rate
-        description: Active customers / cohort_size.
+        description: Active customers / cohort_size. Includes customers with any order status.
       - name: total_orders
-        description: Total orders placed by cohort segment in this period.
+        description: Total orders placed by cohort segment in this period (all statuses including cancelled and created).
       - name: total_revenue
         description: Total revenue generated by cohort segment in this period.
       - name: total_cogs
@@ -587,6 +605,8 @@ models:
     description: |
       Customer-level RFM-style metrics including recency, frequency, monetary, and inter-order gaps.
       Grain: customer_id.
+      Note: total_orders counts all distinct orders per customer regardless of status (created, paid,
+      shipped, delivered, cancelled, returned). Some customers may have only cancelled or created orders.
     columns:
       - name: customer_id
         description: Unique customer.
@@ -600,7 +620,7 @@ models:
       - name: last_order_date
         description: Date of customer's most recent order.
       - name: total_orders
-        description: Lifetime count of distinct orders.
+        description: Lifetime count of distinct orders (all statuses including cancelled and created).
         tests: [not_null]
       - name: total_revenue
         description: Lifetime net revenue in VND.

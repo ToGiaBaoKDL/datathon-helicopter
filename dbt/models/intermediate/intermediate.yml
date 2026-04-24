@@ -25,10 +25,16 @@ models:
         tests: [not_null]
 
   - name: int_daily_commercial_signals
-    description: Daily aggregated commercial metrics from transaction tables.
+    description: |
+      Daily aggregated commercial metrics from transaction tables.
+      Note: Aggregations include all order statuses (created, paid, shipped, delivered, cancelled, returned)
+      to remain consistent with raw.sales revenue. If successful-order-only metrics are required,
+      filter on order_status before aggregating.
     columns:
       - name: sales_date
         tests: [not_null, unique]
+      - name: order_count
+        description: Count of distinct orders placed on this day (all statuses, including cancelled and created).
 
   - name: int_inventory_monthly_signals
     description: Monthly inventory summaries shifted by one month for leakage-safe joins.
