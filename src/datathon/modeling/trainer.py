@@ -23,11 +23,14 @@ class Trainer:
         forecaster: BaseForecaster,
         cv: ExpandingWindowCV,
         cogs_column: str = "cogs",
+        residual_target: bool = False,
     ):
         self.forecaster = forecaster
         self.cv = cv
         self.cogs_column = cogs_column
         self.cogs_is_ratio = cogs_column == "cogs_ratio"
+        self.residual_target = residual_target
+        self.revenue_column = "revenue_residual" if residual_target else "revenue"
 
     def run_cv(
         self, df: pd.DataFrame, *, return_predictions: bool = False
@@ -54,7 +57,7 @@ class Trainer:
             fold_forecaster = copy.deepcopy(self.forecaster)
             fold_forecaster.fit(
                 train_df[cols],
-                train_df["revenue"],
+                train_df[self.revenue_column],
                 train_df[self.cogs_column],
             )
 
@@ -64,6 +67,7 @@ class Trainer:
                 val_df[["sales_date"]].rename(columns={"sales_date": "date"}),
                 cols,
                 cogs_is_ratio=self.cogs_is_ratio,
+                residual_target=self.residual_target,
             )
 
             actual = val_df[["sales_date", "revenue", "cogs"]].copy()
@@ -91,7 +95,7 @@ class Trainer:
         """Train final models on the full historical dataset."""
         df = df.copy().sort_values("sales_date").reset_index(drop=True)
         cols = feature_columns(df)
-        self.forecaster.fit(df[cols], df["revenue"], df[self.cogs_column])
+        self.forecaster.fit(df[cols], df[self.revenue_column], df[self.cogs_column])
         return self.forecaster, cols
 
     @staticmethod
@@ -102,6 +106,7 @@ class Trainer:
         model_type: str,
         cv_results: dict | None = None,
         cogs_column: str = "cogs",
+        residual_target: bool = False,
     ) -> None:
         model_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,6 +114,7 @@ class Trainer:
             "model_type": model_type,
             "feature_columns": feature_cols,
             "cogs_column": cogs_column,
+            "residual_target": residual_target,
         }
         with open(model_dir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
@@ -122,7 +128,7 @@ class Trainer:
     @staticmethod
     def load_artifacts(
         model_dir: Path,
-    ) -> tuple[BaseForecaster, list[str], str, str]:
+    ) -> tuple[BaseForecaster, list[str], str, str, bool]:
         from datathon.modeling.forecasters import get_forecaster
 
         with open(model_dir / "meta.json") as f:
@@ -131,8 +137,9 @@ class Trainer:
         model_type = meta["model_type"]
         feature_cols = meta["feature_columns"]
         cogs_column = meta.get("cogs_column", "cogs")
+        residual_target = meta.get("residual_target", False)
 
         forecaster_cls = get_forecaster(model_type)
         forecaster = forecaster_cls.load(model_dir / "forecaster.pkl")
 
-        return forecaster, feature_cols, model_type, cogs_column
+        return forecaster, feature_cols, model_type, cogs_column, residual_target

@@ -14,7 +14,7 @@ from datathon.modeling.cv import ExpandingWindowCV
 from datathon.modeling.factory import build_forecaster
 from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.trainer import Trainer
-from datathon.utils.config import load_modeling_config
+from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_forecast_base, load_modeling_data
 from datathon.utils.paths import models_dir, warehouse_path
@@ -152,12 +152,16 @@ def run(options: TrainOptions) -> None:
     console.print(f"Loaded [bold]{len(df)}[/bold] rows | Model: [bold]{options.model_type}[/bold]")
 
     config = load_modeling_config(options.config_path)
-    cogs_target = config.get("cogs_target", "absolute")
-    cogs_column = "cogs_ratio" if cogs_target == "ratio" else "cogs"
+    revenue_column, cogs_column, residual_target = resolve_targets(config)
 
     forecaster = build_forecaster(options.model_type, config)
     cv = ExpandingWindowCV(n_folds=options.n_folds, horizon_days=options.horizon_days)
-    trainer = Trainer(forecaster=forecaster, cv=cv, cogs_column=cogs_column)
+    trainer = Trainer(
+        forecaster=forecaster,
+        cv=cv,
+        cogs_column=cogs_column,
+        residual_target=residual_target,
+    )
 
     if options.mode == "evaluate":
         model_results = trainer.run_cv(df)
@@ -177,5 +181,6 @@ def run(options: TrainOptions) -> None:
             model_type=options.model_type,
             cv_results=model_results,
             cogs_column=cogs_column,
+            residual_target=residual_target,
         )
         console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")

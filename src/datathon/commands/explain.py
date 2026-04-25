@@ -74,7 +74,9 @@ def run(options: ExplainOptions) -> None:
         raise CommandError(f"Model directory not found: {options.model_dir}")
 
     console.print(f"Loading artifacts from [bold]{options.model_dir}[/bold] …")
-    forecaster, _feature_cols, _model_type, _cogs_col = Trainer.load_artifacts(options.model_dir)
+    forecaster, _feature_cols, _model_type, _cogs_col, _residual = Trainer.load_artifacts(
+        options.model_dir
+    )
 
     df = load_modeling_data(options.warehouse)
     console.print(f"Loaded [bold]{len(df)}[/bold] rows for background distribution.")

@@ -391,6 +391,40 @@ models/lightgbm/
 **SQL leap-year fix:**
 - `mart_forecast_daily_features.sql`: `day_of_year_sin/cos` denominator now uses full Gregorian rule (`year % 4 = 0 and (year % 100 != 0 or year % 400 = 0)`) instead of naive `% 4`.
 
+### 28. Feature Engineering Overhaul & Residual Modeling
+**Goal:** Reduce Total MAE from ~1.16M → target <900K via richer features + residual target.
+
+**New features added to `mart_forecast_daily_features.sql` (49 → 68 columns):**
+- **Short-term lags**: `lag_2d_revenue`, `lag_3d_revenue` — capture immediate autocorrelation.
+- **COGS features**: `lag_7d_cogs`, `lag_28d_cogs`, `roll_mean_7d_cogs`, `roll_mean_28d_cogs` — weekly/monthly COGS patterns.
+- **Week-of-year seasonality**: `week_of_year`, `week_of_year_sin/cos` — 52-week cycle.
+- **Quarter-end effect**: `days_to_quarter_end`, `is_quarter_end` — Q4 shopping vs Q1 dip.
+- **Yearly volatility**: `roll_std_365d_revenue` — regime detection.
+- **Acceleration (momentum of momentum)**: `rev_wow_acceleration`, `rev_mom_acceleration`, `rev_yoy_acceleration` — change in growth rate.
+- **EMA (Python recursive)**: `ema_7d_revenue`, `ema_28d_revenue` — exponential weighting, faster reaction than simple mean.
+- **Residual baseline**: `revenue_baseline = lag_365d_revenue`, `cogs_baseline = lag_365d_cogs`.
+- **Residual target**: `revenue_residual = revenue - baseline`, `cogs_residual = cogs - baseline`.
+
+**Residual modeling (`configs/modeling.yaml`: `residual_target: true`):**
+- Models predict `revenue_residual` and `cogs_residual` instead of raw values.
+- Recursive forecast reconstructs: `revenue = baseline + predicted_residual`.
+- Rationale: YoY baseline already captures ~70-80% variance. Model only learns "deviation from last year", which has smaller range and is easier to predict accurately.
+- COGS ratio mode (`cogs_target: ratio`) still supported; residual only applies to absolute COGS.
+
+**Weighted ensemble (`compare-models`):**
+- Previously: equal weights (simple average).
+- Now: **inverse MAE weights** — models with lower CV MAE get higher weight.
+- Weights computed per fold and normalized: `w_i = (1 / MAE_i) / Σ(1 / MAE_j)`.
+
+**Tuning defaults:**
+- `n_trials` default: `30` → **`50`** — deeper search space exploration.
+
+**Validation:**
+- `dbt build --select mart_forecast_daily_features`: **3 PASS** (1 model + 2 tests).
+- Feature count: **68 columns** (63 features, 5 meta).
+- `pytest`: **10 passed**.
+- `ruff check src/ tests/`: All passed.
+
 ## Remaining Notes / Known Issues
 - Evidence pages still use `union all` unpivot patterns where needed; this is standard for Evidence component consumption and not duplicate business logic.
 - **Kaggle submission executed**: Ensemble (LightGBM + XGBoost) submitted successfully to datathon-2026-round-1.
@@ -398,6 +432,29 @@ models/lightgbm/
 - 359 sold products have negative `realized_margin_rate` (COGS > net revenue after discounts), reflecting deep promotional discounting.
 - 181 days in 2012 have `sessions = 0` in `mart_forecast_daily_base` (missing early web_traffic data).
 - **Shipment data gaps**: ~80,878 orders (12.5%) lack records in `raw.shipments`. Of these, 59,462 are `cancelled` (expected), but 21,416 are non-cancelled — including 524 `delivered`, 29 `returned`, and 11 `shipped` orders with no shipment trail. This is a raw data referential-integrity gap, not a dbt bug. `mart_daily_fulfillment_kpis` correctly measures only orders with shipment records.
+
+### 29. ML Test Suite Expansion (New)
+**Goal:** Increase pytest coverage from 11 → 76 tests across all ML pipeline components.
+
+**New test files:**
+- **`tests/test_cv.py`** (8 tests): `ExpandingWindowCV` — folds, train growth, val fixed length, no overlap, single fold, not-enough-rows error, horizon > data, end clipping.
+- **`tests/test_recursive.py`** (16 tests): `_update_row_features` — lags, growth ratios, rolling stats, baseline/residual, cogs_ratio, acceleration. `_prepare_future_frame` — calendar features, leap year, Tet, exogenous ffill, NaN targets. `feature_columns` — meta exclusion.
+- **`tests/test_forecasters.py`** (7 tests): Registry (`FORECASTERS`, `get_forecaster`, `list_forecasters`), `build_forecaster`, predict-before-fit error, `best_iterations` default.
+- **`tests/test_config.py`** (6 tests): `load_modeling_config` base + overlay, `resolve_targets` for absolute/ratio/residual modes.
+- **`tests/test_tuner.py`** (9 tests): `_inject_fixed_params` merge logic, `_suggest_lightgbm/xgboost/catboost` key validation, `_make_stop_callback` early-stop behavior (patience, no-stop threshold, consecutive worse).
+- **`tests/test_explainer.py`** (5 tests): `explain_forecaster` with mocked SHAP — revenue/cogs keys, missing model attrs error, sample_size, plot saving. `_save_shap_plots` file creation.
+- **`tests/test_data_loaders.py`** (5 tests): Mocked DuckDB — `load_modeling_data` (date parse, empty raise, int→float cast), `load_forecast_base`, `load_scaffold`.
+
+**Updated `test_trainer.py`:**
+- Added **CatBoostForecaster** to all parametrized tests (`iterations=10` for speed).
+- Added `test_trainer_cv_returns_predictions_when_asked` — verifies `run_cv(..., return_predictions=True)` returns per-fold DataFrames with correct columns.
+
+**Bug found & fixed during testing:**
+- `src/datathon/modeling/factory.py`: `build_forecaster` silently used empty kwargs when `model_type` missing from config. **Fixed** to raise `ValueError` with available model types.
+
+**Validation:**
+- `pytest`: **76 passed** (full suite).
+- `ruff check src/ tests/`: All passed.
 
 ## Quick Commands
 ```bash

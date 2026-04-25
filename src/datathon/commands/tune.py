@@ -38,7 +38,7 @@ def parse_args(raw_args: list[str]) -> TuneOptions:
         raise CommandError(f"--model-type must be one of: {', '.join(available)}.")
 
     warehouse = Path(take_option(args, "--warehouse", default=str(warehouse_path())))
-    n_trials = int(take_option(args, "--n-trials", default="30"))
+    n_trials = int(take_option(args, "--n-trials", default="50"))
     timeout_raw = take_option(args, "--timeout", default="")
     timeout = int(timeout_raw) if timeout_raw else None
     n_folds = int(take_option(args, "--n-folds", default="2"))

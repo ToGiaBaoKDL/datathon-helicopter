@@ -41,9 +41,9 @@ uv run datathon build-raw --strict
 uv run dbt build --project-dir dbt --profiles-dir dbt
 
 # 5. Tune all models, merge configs, compare, and generate submission
-uv run datathon tune --model-type lightgbm --n-trials 30 --patience 5
-uv run datathon tune --model-type xgboost   --n-trials 30 --patience 5
-uv run datathon tune --model-type catboost  --n-trials 30 --patience 5
+uv run datathon tune --model-type lightgbm --patience 5
+uv run datathon tune --model-type xgboost --patience 5
+uv run datathon tune --model-type catboost --patience 5
 
 # Merge individual delta configs into one file for compare-models
 uv run python -c "
@@ -110,11 +110,19 @@ uv run datathon submit-kaggle --dry-run --file data/submissions/best_submission.
 
 ### Config Management
 
-Base config lives in `configs/modeling.yaml` (source of truth). Tuning writes **delta configs** (only the tuned model's hyperparameters) to `configs/tuned/<model>.yaml`:
+Base config lives in `configs/modeling.yaml` (source of truth):
+
+```yaml
+cogs_target: absolute          # "absolute" or "ratio"
+residual_target: true          # predict residual vs YoY baseline instead of raw values
+models:
+  ...
+```
+
+Tuning writes **delta configs** (only the tuned model's hyperparameters) to `configs/tuned/<model>.yaml`:
 
 ```yaml
 # configs/tuned/catboost.yaml
-cogs_target: ratio  # preserved from base
 models:
   catboost:
     learning_rate: 0.0789
@@ -213,6 +221,16 @@ Fold 3: [train======================|val===]
 ### Two-Stage COGS
 
 When `cogs_target: ratio` is set in the config, the COGS model predicts `cogs / revenue` instead of absolute COGS. The ratio is clamped to `[0, 2]` and converted back to absolute values (`revenue * ratio`) during recursive forecast. This leverages the strong revenue-COGS correlation (≈0.976) while allowing negative-margin scenarios.
+
+### Residual Modeling
+
+When `residual_target: true` is set (recommended), models predict **deviations from the YoY baseline** instead of raw values:
+- `revenue_residual = revenue - lag_365d_revenue`
+- `cogs_residual = cogs - lag_365d_cogs`
+
+Recursive forecast reconstructs: `revenue = lag_365d_revenue + predicted_residual`.
+
+This is especially effective for long horizons (548 days) because the YoY baseline already captures ~70-80% of variance; the model only learns the "delta" from last year, which is easier to predict accurately.
 
 ---
 

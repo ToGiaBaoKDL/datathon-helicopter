@@ -71,11 +71,13 @@ def run(options: PredictOptions) -> None:
             "Run 'datathon train --mode train-final' first."
         )
 
-    forecaster, feature_cols, model_type, cogs_column = Trainer.load_artifacts(options.model_dir)
+    forecaster, feature_cols, model_type, cogs_column, residual_target = Trainer.load_artifacts(
+        options.model_dir
+    )
     cogs_is_ratio = cogs_column == "cogs_ratio"
     console.print(
         f"Loaded [bold]{model_type}[/bold] model from [bold]{options.model_dir}[/bold] "
-        f"(COGS target: {cogs_column})"
+        f"(COGS target: {cogs_column}, residual: {residual_target})"
     )
 
     history = load_modeling_data(options.warehouse)
@@ -90,6 +92,7 @@ def run(options: PredictOptions) -> None:
         scaffold=scaffold,
         feature_cols=feature_cols,
         cogs_is_ratio=cogs_is_ratio,
+        residual_target=residual_target,
     )
 
     expected = submission_columns()

@@ -12,7 +12,7 @@ import pandas as pd
 from datathon.modeling.cv import ExpandingWindowCV
 from datathon.modeling.factory import build_forecaster
 from datathon.modeling.recursive import feature_columns, recursive_forecast
-from datathon.utils.config import load_modeling_config
+from datathon.utils.config import load_modeling_config, resolve_targets
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -103,11 +103,13 @@ def _make_objective(
     model_type: str,
     base_config: dict[str, Any],
     cogs_column: str,
+    residual_target: bool = False,
     n_folds: int = 2,
     horizon_days: int = 548,
 ) -> callable:
     """Build an Optuna objective that minimises total MAE with per-fold pruning."""
     cogs_is_ratio = cogs_column == "cogs_ratio"
+    revenue_column = "revenue_residual" if residual_target else "revenue"
 
     def objective(trial: optuna.Trial) -> float:
         if model_type == "lightgbm":
@@ -131,9 +133,9 @@ def _make_objective(
 
             forecaster.fit(
                 train_df[cols],
-                train_df["revenue"],
+                train_df[revenue_column],
                 train_df[cogs_column],
-                eval_set=(val_df[cols], val_df["revenue"], val_df[cogs_column]),
+                eval_set=(val_df[cols], val_df[revenue_column], val_df[cogs_column]),
             )
 
             rev_iter, cogs_iter = forecaster.best_iterations()
@@ -148,6 +150,7 @@ def _make_objective(
                 val_df[["sales_date"]].rename(columns={"sales_date": "date"}),
                 cols,
                 cogs_is_ratio=cogs_is_ratio,
+                residual_target=residual_target,
             )
 
             merged = (
@@ -182,7 +185,7 @@ def _make_objective(
 def run_study(
     df: pd.DataFrame,
     model_type: str,
-    n_trials: int = 30,
+    n_trials: int = 50,
     timeout: int | None = None,
     n_folds: int = 2,
     horizon_days: int = 548,
@@ -224,8 +227,7 @@ def run_study(
     (best_params, best_total_mae)
     """
     config = load_modeling_config(config_path)
-    cogs_target = config.get("cogs_target", "absolute")
-    cogs_column = "cogs_ratio" if cogs_target == "ratio" else "cogs"
+    revenue_column, cogs_column, residual_target = resolve_targets(config)
 
     study_name = study_name or f"datathon_{model_type}"
     study = optuna.create_study(
@@ -237,7 +239,9 @@ def run_study(
         load_if_exists=True,
     )
 
-    objective = _make_objective(df, model_type, config, cogs_column, n_folds, horizon_days)
+    objective = _make_objective(
+        df, model_type, config, cogs_column, residual_target, n_folds, horizon_days
+    )
     stop_callback = _make_stop_callback(patience=patience)
     study.optimize(
         objective,

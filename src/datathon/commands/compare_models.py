@@ -19,7 +19,7 @@ from datathon.modeling.forecasters.ensemble import EnsembleForecaster
 from datathon.modeling.recursive import recursive_forecast
 from datathon.modeling.trainer import Trainer
 from datathon.utils.competition import submission_columns
-from datathon.utils.config import load_modeling_config
+from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_modeling_data, load_scaffold
 from datathon.utils.paths import models_dir, submissions_dir, warehouse_path
@@ -74,7 +74,7 @@ def print_help() -> None:
     )
     console.print(
         "Runs expanding-window CV for every registered model type, "
-        "evaluates an unweighted ensemble of all models, "
+        "evaluates a weighted ensemble (inverse MAE), "
         "picks the winner by lowest average MAE, trains finals, "
         "and generates a submission from the true winner.\n"
         "[dim]--config[/dim]   Optional modeling config path "
@@ -89,8 +89,9 @@ def _run_comparison(
     n_folds: int,
     horizon_days: int,
     cogs_column: str = "cogs",
-) -> tuple[str, dict, dict[str, list[pd.DataFrame]]]:
-    """Run CV for all models, compute ensemble CV, return (winner, all_results, all_preds)."""
+    residual_target: bool = False,
+) -> tuple[str, dict, dict[str, list[pd.DataFrame]], list[float]]:
+    """Run CV for all models, compute weighted ensemble CV."""
     cv = ExpandingWindowCV(n_folds=n_folds, horizon_days=horizon_days)
     all_results: dict[str, dict[str, list[dict[str, float]]]] = {}
     all_preds: dict[str, list[pd.DataFrame]] = {}
@@ -105,7 +106,12 @@ def _run_comparison(
         for model_type in available:
             task = progress.add_task(f"Evaluating {model_type} …", total=None)
             forecaster = build_forecaster(model_type, config)
-            trainer = Trainer(forecaster=forecaster, cv=cv, cogs_column=cogs_column)
+            trainer = Trainer(
+                forecaster=forecaster,
+                cv=cv,
+                cogs_column=cogs_column,
+                residual_target=residual_target,
+            )
             results, preds = trainer.run_cv(df, return_predictions=True)
             all_results[model_type] = results
             all_preds[model_type] = preds
@@ -121,13 +127,20 @@ def _run_comparison(
                 ),
             )
 
-    # Compute unweighted ensemble CV score from fold predictions.
+    # Compute weighted ensemble CV score from fold predictions.
+    # Weights = inverse total MAE (lower MAE → higher weight).
+    model_weights: dict[str, float] = {}
+    for model_type in available:
+        model_weights[model_type] = 1.0 / max(scores[model_type], 1.0)
+    weight_sum = sum(model_weights.values())
+    normalized_weights = [model_weights[m] / weight_sum for m in available]
+
     ensemble_results: dict[str, list[dict[str, float]]] = {"revenue": [], "cogs": []}
     for fold_idx in range(n_folds):
         fold_frames = []
         for model_type in available:
             fold_frames.append(all_preds[model_type][fold_idx])
-        # Align on date and average
+        # Align on date and weighted average
         merged = fold_frames[0][["date", "revenue_pred", "cogs_pred"]].copy()
         merged = merged.rename(columns={"revenue_pred": "revenue_0", "cogs_pred": "cogs_0"})
         for i, frame in enumerate(fold_frames[1:], start=1):
@@ -137,8 +150,10 @@ def _run_comparison(
             )
         rev_cols = [c for c in merged.columns if c.startswith("revenue_")]
         cogs_cols = [c for c in merged.columns if c.startswith("cogs_")]
-        merged["revenue_pred"] = merged[rev_cols].mean(axis=1)
-        merged["cogs_pred"] = merged[cogs_cols].mean(axis=1)
+
+        w = np.array(normalized_weights)
+        merged["revenue_pred"] = np.average(merged[rev_cols].to_numpy(), axis=1, weights=w)
+        merged["cogs_pred"] = np.average(merged[cogs_cols].to_numpy(), axis=1, weights=w)
 
         # Merge with actuals from the first model's fold predictions
         actual = fold_frames[0][["date"]].copy()
@@ -170,7 +185,7 @@ def _run_comparison(
     all_results["ensemble"] = ensemble_results
 
     winner = min(scores, key=scores.get)
-    return winner, all_results, all_preds
+    return winner, all_results, all_preds, normalized_weights
 
 
 def _print_summary(
@@ -201,16 +216,15 @@ def _print_summary(
 def run(options: CompareOptions) -> None:
     df = load_modeling_data(options.warehouse)
     config = load_modeling_config(options.config_path)
-    cogs_target = config.get("cogs_target", "absolute")
-    cogs_column = "cogs_ratio" if cogs_target == "ratio" else "cogs"
+    revenue_column, cogs_column, residual_target = resolve_targets(config)
 
     console.print(
-        f"Comparing [bold]{len(list_forecasters())}[/bold] model types + ensemble on "
-        f"[bold]{len(df)}[/bold] rows (COGS target: {cogs_target}) …"
+        f"Comparing [bold]{len(list_forecasters())}[/bold] model types + weighted ensemble on "
+        f"[bold]{len(df)}[/bold] rows (COGS target: {cogs_column}, residual: {residual_target}) …"
     )
 
-    winner, all_results, _all_preds = _run_comparison(
-        df, config, options.n_folds, options.horizon_days, cogs_column
+    winner, all_results, _all_preds, ensemble_weights = _run_comparison(
+        df, config, options.n_folds, options.horizon_days, cogs_column, residual_target
     )
     _print_summary(all_results, winner)
 
@@ -222,7 +236,12 @@ def run(options: CompareOptions) -> None:
             console.print(f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]")
             continue
         forecaster = build_forecaster(model_type, config)
-        trainer = Trainer(forecaster=forecaster, cv=ExpandingWindowCV(), cogs_column=cogs_column)
+        trainer = Trainer(
+            forecaster=forecaster,
+            cv=ExpandingWindowCV(),
+            cogs_column=cogs_column,
+            residual_target=residual_target,
+        )
         forecaster_fitted, feature_cols = trainer.train_final(df)
         Trainer.save_artifacts(
             model_dir=model_dir,
@@ -231,23 +250,27 @@ def run(options: CompareOptions) -> None:
             model_type=model_type,
             cv_results=all_results.get(model_type),
             cogs_column=cogs_column,
+            residual_target=residual_target,
         )
         console.print(f"  [green]{model_type}[/green] saved to {model_dir}")
 
     # Generate submission from the true winner
     if winner == "ensemble":
-        console.print("\n[bold]Ensemble won CV — generating ensemble submission …[/bold]")
+        console.print(
+            f"\n[bold]Ensemble won CV — generating weighted ensemble submission "
+            f"(weights: {[f'{w:.3f}' for w in ensemble_weights]}) …[/bold]"
+        )
         members = []
         feature_cols = None
         cogs_is_ratio = False
         for model_type in available:
             model_path = options.model_dir / model_type
-            forecaster, cols, _loaded_type, cogs_col = Trainer.load_artifacts(model_path)
+            forecaster, cols, _loaded_type, cogs_col, _residual = Trainer.load_artifacts(model_path)
             members.append(forecaster)
             if feature_cols is None:
                 feature_cols = cols
                 cogs_is_ratio = cogs_col == "cogs_ratio"
-        ensemble = EnsembleForecaster(members=members, weights=None)
+        ensemble = EnsembleForecaster(members=members, weights=list(ensemble_weights))
         scaffold = load_scaffold(options.warehouse)
         predictions = recursive_forecast(
             forecaster=ensemble,
@@ -255,12 +278,13 @@ def run(options: CompareOptions) -> None:
             scaffold=scaffold,
             feature_cols=feature_cols,
             cogs_is_ratio=cogs_is_ratio,
+            residual_target=residual_target,
         )
     else:
         console.print(f"\n[bold]{winner}[/bold] won CV — generating winner submission …")
         winner_dir = options.model_dir / winner
-        winner_fitted, feature_cols, _model_type, winner_cogs_col = Trainer.load_artifacts(
-            winner_dir
+        winner_fitted, feature_cols, _model_type, winner_cogs_col, winner_residual = (
+            Trainer.load_artifacts(winner_dir)
         )
         winner_cogs_is_ratio = winner_cogs_col == "cogs_ratio"
         scaffold = load_scaffold(options.warehouse)
@@ -270,6 +294,7 @@ def run(options: CompareOptions) -> None:
             scaffold=scaffold,
             feature_cols=feature_cols,
             cogs_is_ratio=winner_cogs_is_ratio,
+            residual_target=winner_residual,
         )
 
     expected = submission_columns()

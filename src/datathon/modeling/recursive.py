@@ -18,15 +18,20 @@ CALENDAR_FEATURES = [
     "is_weekend",
     "day_of_month",
     "day_of_year",
+    "week_of_year",
     "days_to_month_end",
+    "days_to_quarter_end",
     "is_month_start",
     "is_month_end",
+    "is_quarter_end",
     "month_sin",
     "month_cos",
     "day_of_week_sin",
     "day_of_week_cos",
     "day_of_year_sin",
     "day_of_year_cos",
+    "week_of_year_sin",
+    "week_of_year_cos",
     "days_to_tet",
     "is_pre_tet_rush",
     "is_tet_holiday",
@@ -41,16 +46,23 @@ CALENDAR_FEATURES = [
 # Features derived from the target variables (revenue / cogs).
 _TARGET_DERIVED = [
     "lag_1d_revenue",
+    "lag_2d_revenue",
+    "lag_3d_revenue",
     "lag_7d_revenue",
+    "lag_8d_revenue",
     "lag_14d_revenue",
     "lag_28d_revenue",
-    "lag_365d_revenue",
-    "lag_8d_revenue",
     "lag_29d_revenue",
+    "lag_365d_revenue",
     "lag_1d_rev_wow_growth",
     "lag_1d_rev_mom_growth",
     "lag_1d_rev_yoy_growth",
+    "rev_wow_acceleration",
+    "rev_mom_acceleration",
+    "rev_yoy_acceleration",
     "lag_1d_cogs",
+    "lag_7d_cogs",
+    "lag_28d_cogs",
     "lag_365d_cogs",
     "roll_mean_7d_revenue",
     "roll_mean_28d_revenue",
@@ -59,10 +71,23 @@ _TARGET_DERIVED = [
     "roll_median_28d_revenue",
     "roll_std_7d_revenue",
     "roll_std_28d_revenue",
+    "roll_std_365d_revenue",
+    "roll_mean_7d_cogs",
+    "roll_mean_28d_cogs",
 ]
 
 
-_META_COLUMNS = {"sales_date", "revenue", "cogs", "cogs_ratio", "tet_date"}
+_META_COLUMNS = {
+    "sales_date",
+    "revenue",
+    "cogs",
+    "cogs_ratio",
+    "revenue_baseline",
+    "cogs_baseline",
+    "revenue_residual",
+    "cogs_residual",
+    "tet_date",
+}
 
 
 @functools.lru_cache(maxsize=1)
@@ -88,17 +113,24 @@ def _update_row_features(combined: pd.DataFrame, idx: int) -> None:
     DataFrame at every recursive step.
     """
     rev = combined["revenue"]
+    cogs = combined["cogs"]
 
-    # Lags
+    # Lags — revenue
     combined.at[idx, "lag_1d_revenue"] = rev.iloc[idx - 1] if idx >= 1 else np.nan
+    combined.at[idx, "lag_2d_revenue"] = rev.iloc[idx - 2] if idx >= 2 else np.nan
+    combined.at[idx, "lag_3d_revenue"] = rev.iloc[idx - 3] if idx >= 3 else np.nan
     combined.at[idx, "lag_7d_revenue"] = rev.iloc[idx - 7] if idx >= 7 else np.nan
     combined.at[idx, "lag_14d_revenue"] = rev.iloc[idx - 14] if idx >= 14 else np.nan
     combined.at[idx, "lag_28d_revenue"] = rev.iloc[idx - 28] if idx >= 28 else np.nan
     combined.at[idx, "lag_365d_revenue"] = rev.iloc[idx - 365] if idx >= 365 else np.nan
     combined.at[idx, "lag_8d_revenue"] = rev.iloc[idx - 8] if idx >= 8 else np.nan
     combined.at[idx, "lag_29d_revenue"] = rev.iloc[idx - 29] if idx >= 29 else np.nan
-    combined.at[idx, "lag_1d_cogs"] = combined["cogs"].iloc[idx - 1] if idx >= 1 else np.nan
-    combined.at[idx, "lag_365d_cogs"] = combined["cogs"].iloc[idx - 365] if idx >= 365 else np.nan
+
+    # Lags — COGS
+    combined.at[idx, "lag_1d_cogs"] = cogs.iloc[idx - 1] if idx >= 1 else np.nan
+    combined.at[idx, "lag_7d_cogs"] = cogs.iloc[idx - 7] if idx >= 7 else np.nan
+    combined.at[idx, "lag_28d_cogs"] = cogs.iloc[idx - 28] if idx >= 28 else np.nan
+    combined.at[idx, "lag_365d_cogs"] = cogs.iloc[idx - 365] if idx >= 365 else np.nan
 
     # Growth ratios
     lag_1d = combined.at[idx, "lag_1d_revenue"]
@@ -106,18 +138,23 @@ def _update_row_features(combined: pd.DataFrame, idx: int) -> None:
     lag_29d = combined.at[idx, "lag_29d_revenue"]
     lag_365d = combined.at[idx, "lag_365d_revenue"]
 
-    combined.at[idx, "lag_1d_rev_wow_growth"] = (
-        (lag_1d / lag_8d - 1) if pd.notna(lag_8d) and lag_8d != 0 else 0.0
-    )
-    combined.at[idx, "lag_1d_rev_mom_growth"] = (
-        (lag_1d / lag_29d - 1) if pd.notna(lag_29d) and lag_29d != 0 else 0.0
-    )
-    combined.at[idx, "lag_1d_rev_yoy_growth"] = (
-        (lag_1d / lag_365d - 1) if pd.notna(lag_365d) and lag_365d != 0 else 0.0
-    )
+    wow = (lag_1d / lag_8d - 1) if pd.notna(lag_8d) and lag_8d != 0 else 0.0
+    mom = (lag_1d / lag_29d - 1) if pd.notna(lag_29d) and lag_29d != 0 else 0.0
+    yoy = (lag_1d / lag_365d - 1) if pd.notna(lag_365d) and lag_365d != 0 else 0.0
+
+    combined.at[idx, "lag_1d_rev_wow_growth"] = wow
+    combined.at[idx, "lag_1d_rev_mom_growth"] = mom
+    combined.at[idx, "lag_1d_rev_yoy_growth"] = yoy
+
+    # Acceleration: change in growth rate from previous day
+    prev_wow = combined.at[idx - 1, "lag_1d_rev_wow_growth"] if idx >= 1 else 0.0
+    prev_mom = combined.at[idx - 1, "lag_1d_rev_mom_growth"] if idx >= 1 else 0.0
+    prev_yoy = combined.at[idx - 1, "lag_1d_rev_yoy_growth"] if idx >= 1 else 0.0
+    combined.at[idx, "rev_wow_acceleration"] = wow - prev_wow
+    combined.at[idx, "rev_mom_acceleration"] = mom - prev_mom
+    combined.at[idx, "rev_yoy_acceleration"] = yoy - prev_yoy
 
     # Rolling statistics on lag_1d_revenue == revenue shifted by 1.
-    # Window [idx-6, idx] for 7-day means revenue[idx-7:idx].
     if idx >= 1:
         win7 = rev.iloc[max(0, idx - 7) : idx].to_numpy()
         win28 = rev.iloc[max(0, idx - 28) : idx].to_numpy()
@@ -136,6 +173,9 @@ def _update_row_features(combined: pd.DataFrame, idx: int) -> None:
         combined.at[idx, "roll_std_28d_revenue"] = (
             float(np.std(win28, ddof=1)) if len(win28) >= 2 else 0.0
         )
+        combined.at[idx, "roll_std_365d_revenue"] = (
+            float(np.std(win365, ddof=1)) if len(win365) >= 2 else 0.0
+        )
     else:
         combined.at[idx, "roll_mean_7d_revenue"] = 0.0
         combined.at[idx, "roll_mean_28d_revenue"] = 0.0
@@ -144,10 +184,28 @@ def _update_row_features(combined: pd.DataFrame, idx: int) -> None:
         combined.at[idx, "roll_median_28d_revenue"] = 0.0
         combined.at[idx, "roll_std_7d_revenue"] = 0.0
         combined.at[idx, "roll_std_28d_revenue"] = 0.0
+        combined.at[idx, "roll_std_365d_revenue"] = 0.0
 
+    # COGS rolling means
+    if idx >= 1:
+        cogs_win7 = cogs.iloc[max(0, idx - 7) : idx].to_numpy()
+        cogs_win28 = cogs.iloc[max(0, idx - 28) : idx].to_numpy()
+        combined.at[idx, "roll_mean_7d_cogs"] = float(np.mean(cogs_win7))
+        combined.at[idx, "roll_mean_28d_cogs"] = float(np.mean(cogs_win28))
+    else:
+        combined.at[idx, "roll_mean_7d_cogs"] = 0.0
+        combined.at[idx, "roll_mean_28d_cogs"] = 0.0
+
+    # Baseline / residual (lag_365d is the naive YoY forecast)
+    if "revenue_baseline" in combined.columns:
+        combined.at[idx, "revenue_baseline"] = combined.at[idx, "lag_365d_revenue"]
+    if "cogs_baseline" in combined.columns:
+        combined.at[idx, "cogs_baseline"] = combined.at[idx, "lag_365d_cogs"]
+
+    # Keep cogs_ratio in sync with absolute cogs when both are present
     if "cogs_ratio" in combined.columns:
-        cogs_val = combined.at[idx, "cogs"]
         rev_val = combined.at[idx, "revenue"]
+        cogs_val = combined.at[idx, "cogs"]
         combined.at[idx, "cogs_ratio"] = (
             cogs_val / rev_val if pd.notna(rev_val) and rev_val != 0 else np.nan
         )
@@ -169,10 +227,16 @@ def _prepare_future_frame(
     future["is_weekend"] = future["day_of_week"].isin([5, 6]).astype(int)
     future["day_of_month"] = future["sales_date"].dt.day
     future["day_of_year"] = future["sales_date"].dt.dayofyear
+    future["week_of_year"] = future["sales_date"].dt.isocalendar().week.astype(int)
     next_month = future["sales_date"] + pd.offsets.MonthBegin(1)
     future["days_to_month_end"] = (next_month - future["sales_date"]).dt.days
     future["is_month_start"] = (future["day_of_month"] <= 3).astype(int)
     future["is_month_end"] = (future["day_of_month"] > 28).astype(int)
+
+    # Quarter end
+    quarter_end = future["sales_date"] + pd.offsets.QuarterEnd(0)
+    future["days_to_quarter_end"] = (quarter_end - future["sales_date"]).dt.days
+    future["is_quarter_end"] = (future["days_to_quarter_end"] <= 3).astype(int)
 
     future["month_sin"] = np.sin(2 * np.pi * future["month"] / 12)
     future["month_cos"] = np.cos(2 * np.pi * future["month"] / 12)
@@ -181,6 +245,8 @@ def _prepare_future_frame(
     _days_in_year = future["sales_date"].apply(lambda d: 366 if d.is_leap_year else 365)
     future["day_of_year_sin"] = np.sin(2 * np.pi * future["day_of_year"] / _days_in_year)
     future["day_of_year_cos"] = np.cos(2 * np.pi * future["day_of_year"] / _days_in_year)
+    future["week_of_year_sin"] = np.sin(2 * np.pi * future["week_of_year"] / 52)
+    future["week_of_year_cos"] = np.cos(2 * np.pi * future["week_of_year"] / 52)
 
     # Vietnamese holidays
     future["is_reunification_day"] = (
@@ -225,6 +291,14 @@ def _prepare_future_frame(
     future["cogs"] = np.nan
     if "cogs_ratio" in history.columns:
         future["cogs_ratio"] = np.nan
+    if "revenue_baseline" in history.columns:
+        future["revenue_baseline"] = np.nan
+    if "cogs_baseline" in history.columns:
+        future["cogs_baseline"] = np.nan
+    if "revenue_residual" in history.columns:
+        future["revenue_residual"] = np.nan
+    if "cogs_residual" in history.columns:
+        future["cogs_residual"] = np.nan
 
     return future
 
@@ -235,6 +309,7 @@ def recursive_forecast(
     scaffold: pd.DataFrame,
     feature_cols: list[str],
     cogs_is_ratio: bool = False,
+    residual_target: bool = False,
 ) -> pd.DataFrame:
     """Generate multi-step forecast by recursively predicting targets.
 
@@ -247,6 +322,11 @@ def recursive_forecast(
         When ``True``, the second model predicts ``cogs / revenue`` instead
         of absolute COGS.  The returned ``cogs`` column is converted back to
         absolute values (``revenue * ratio``).
+    residual_target:
+        When ``True``, models predict ``revenue_residual`` and
+        ``cogs_residual`` instead of raw revenue / COGS.  The returned
+        ``revenue`` and ``cogs`` columns are reconstructed as
+        ``baseline + predicted_residual``.
     """
     history = history.copy()
     future = _prepare_future_frame(history, scaffold)
@@ -262,15 +342,31 @@ def recursive_forecast(
         X = combined[feature_cols].iloc[[idx]]
         pred_rev, pred_cogs = forecaster.predict(X)
 
-        rev_val = max(0.0, float(pred_rev[0]))
-        combined.at[idx, "revenue"] = rev_val
+        if residual_target:
+            rev_baseline = combined.at[idx, "revenue_baseline"]
+            rev_baseline = float(rev_baseline) if pd.notna(rev_baseline) else 0.0
+            rev_val = max(0.0, rev_baseline + float(pred_rev[0]))
+            combined.at[idx, "revenue"] = rev_val
 
-        if cogs_is_ratio:
-            ratio_val = max(0.0, min(2.0, float(pred_cogs[0])))  # clamp ratio to [0, 2]
-            combined.at[idx, "cogs_ratio"] = ratio_val
-            combined.at[idx, "cogs"] = rev_val * ratio_val
+            if cogs_is_ratio:
+                ratio_val = max(0.0, min(2.0, float(pred_cogs[0])))
+                combined.at[idx, "cogs_ratio"] = ratio_val
+                combined.at[idx, "cogs"] = rev_val * ratio_val
+            else:
+                cogs_baseline = combined.at[idx, "cogs_baseline"]
+                cogs_baseline = float(cogs_baseline) if pd.notna(cogs_baseline) else 0.0
+                cogs_val = max(0.0, cogs_baseline + float(pred_cogs[0]))
+                combined.at[idx, "cogs"] = cogs_val
         else:
-            combined.at[idx, "cogs"] = max(0.0, float(pred_cogs[0]))
+            rev_val = max(0.0, float(pred_rev[0]))
+            combined.at[idx, "revenue"] = rev_val
+
+            if cogs_is_ratio:
+                ratio_val = max(0.0, min(2.0, float(pred_cogs[0])))
+                combined.at[idx, "cogs_ratio"] = ratio_val
+                combined.at[idx, "cogs"] = rev_val * ratio_val
+            else:
+                combined.at[idx, "cogs"] = max(0.0, float(pred_cogs[0]))
 
     predictions = combined.iloc[history_len:][["sales_date", "revenue", "cogs"]].copy()
     predictions = predictions.rename(columns={"sales_date": "date"})

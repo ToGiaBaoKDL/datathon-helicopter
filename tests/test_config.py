@@ -47,12 +47,8 @@ def test_resolve_targets_residual() -> None:
     assert residual is True
 
 
-def test_resolve_targets_residual_overrides_ratio() -> None:
-    """When residual_target=True, cogs_column should be cogs_residual even if cogs_target=ratio."""
+def test_resolve_targets_ratio_plus_residual_raises() -> None:
+    """cogs_target='ratio' + residual_target=True is an anti-pattern and should raise."""
     cfg = {"cogs_target": "ratio", "residual_target": True}
-    rev_col, cogs_col, residual = resolve_targets(cfg)
-    assert rev_col == "revenue_residual"
-    # The implementation checks cogs_target == 'ratio' first, so this would be cogs_ratio
-    # Let's verify actual behavior.
-    assert cogs_col == "cogs_ratio"  # ratio branch comes first in the if-else
-    assert residual is True
+    with pytest.raises(ValueError):
+        resolve_targets(cfg)

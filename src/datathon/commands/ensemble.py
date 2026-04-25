@@ -88,6 +88,7 @@ def run(options: EnsembleOptions) -> None:
     members: list = []
     feature_cols: list[str] | None = None
     cogs_is_ratio = False
+    residual_target = False
     for model_type in options.model_types:
         model_path = options.model_dir / model_type
         if not model_path.exists():
@@ -96,11 +97,12 @@ def run(options: EnsembleOptions) -> None:
                 f"Run 'datathon train --mode train-final --model-type {model_type}' first."
             )
 
-        forecaster, cols, loaded_type, cogs_col = Trainer.load_artifacts(model_path)
+        forecaster, cols, loaded_type, cogs_col, res_target = Trainer.load_artifacts(model_path)
         members.append(forecaster)
         if feature_cols is None:
             feature_cols = cols
             cogs_is_ratio = cogs_col == "cogs_ratio"
+            residual_target = res_target
         elif cols != feature_cols:
             raise CommandError(
                 f"Feature mismatch: {model_type} has {len(cols)} features, "
@@ -123,6 +125,7 @@ def run(options: EnsembleOptions) -> None:
         scaffold=scaffold,
         feature_cols=feature_cols,
         cogs_is_ratio=cogs_is_ratio,
+        residual_target=residual_target,
     )
 
     expected = submission_columns()
