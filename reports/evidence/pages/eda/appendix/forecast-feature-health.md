@@ -13,7 +13,7 @@ select
     sum(case when lag_7d_revenue is null then 1 else 0 end) as null_lag_7d_revenue,
     sum(case when lag_28d_revenue is null then 1 else 0 end) as null_lag_28d_revenue,
     sum(case when roll_mean_7d_revenue is null then 1 else 0 end) as null_roll_mean_7d_revenue,
-    sum(case when lag_1d_sessions is null then 1 else 0 end) as null_lag_1d_sessions
+    sum(case when lag_1d_cogs is null then 1 else 0 end) as null_lag_1d_cogs
 from datathon_warehouse.mart_forecast_daily_features
 ```
 
@@ -25,8 +25,8 @@ select
     lag_7d_revenue,
     lag_28d_revenue,
     roll_mean_7d_revenue,
-    lag_1d_sessions,
-    lag_1m_avg_stockout_days
+    lag_1d_cogs,
+    lag_365d_revenue
 from datathon_warehouse.mart_forecast_daily_features
 order by sales_date
 ```

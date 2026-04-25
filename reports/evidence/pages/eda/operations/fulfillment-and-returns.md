@@ -40,6 +40,16 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
+```sql latest_fulfillment
+select
+    free_shipping_share,
+    avg_shipping_fee
+from datathon_warehouse.mart_daily_fulfillment_kpis
+where sales_date <= '${inputs.date_range.end}'
+order by sales_date desc
+limit 1
+```
+
 ```sql returns_long
 select sales_date, 'Return Record Rate' as metric, return_record_rate as value
 from datathon_warehouse.mart_daily_returns_kpis
@@ -83,6 +93,22 @@ from datathon_warehouse.mart_daily_returns_kpis
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 ```
 
+```sql returns_reason_pct
+select
+    return_reason,
+    reason_count,
+    reason_count::double / sum(reason_count) over () as reason_pct
+from ${returns_reason_summary}
+order by reason_count desc
+```
+
+```sql top_return_reason
+select return_reason, reason_count, reason_pct
+from ${returns_reason_pct}
+order by reason_count desc
+limit 1
+```
+
 ```sql returns_heatmap_dow
 select
     extract(dow from sales_date) as dow,
@@ -116,13 +142,13 @@ order by 1, 2
 ## Delivery Performance
 
 <Alert status="info">
-Delivery time has remained remarkably stable at ~6 days across the entire dataset. 
+Delivery time has remained remarkably stable across the entire dataset. 
 This is a strength — unlike conversion or revenue, fulfillment reliability has not degraded over time.
 </Alert>
 
 <Alert status="warning">
-Only <b>0.14% of orders have free shipping</b>. In e-commerce, free shipping is one of the highest-ROI conversion tactics. 
-With average shipping fee at only 5 VND (effectively free already), the business should test 
+Only <Value data={latest_fulfillment} column=free_shipping_share fmt=pct1/> of orders have free shipping. In e-commerce, free shipping is one of the highest-ROI conversion tactics. 
+With average shipping fee at only <Value data={latest_fulfillment} column=avg_shipping_fee fmt=num0/> VND (effectively free already), the business should test 
 "free shipping on all orders" messaging to remove the psychological barrier.
 </Alert>
 
@@ -156,12 +182,14 @@ With average shipping fee at only 5 VND (effectively free already), the business
     yAxisTitle="Days"
     xAxisTitle="Date"
     yFmt="0"
-/>
+>
+    <ReferenceLine y=7 label="7-Day SLA" hideValue=true color=warning/>
+</LineChart>
 
 ## Return Rate Trends
 
 <Alert status="warning">
-Return rates fluctuate around 5–6% but periodically spike above the 5% quality threshold. 
+Return rates fluctuate around the 5% quality threshold but periodically spike above it. 
 Sustained elevation indicates root-cause issues in product quality, sizing accuracy, or fulfillment damage.
 </Alert>
 
@@ -191,6 +219,11 @@ Understanding why customers return is the first step to reducing return volume.
 Defective and wrong-size returns are operational failures; changed-mind returns are market signals.
 </Alert>
 
+<Alert status="warning">
+<b><Value data={top_return_reason} column=return_reason/></b> is the dominant return reason (<Value data={top_return_reason} column=reason_count fmt=num0/> returns, <Value data={top_return_reason} column=reason_pct fmt=pct1/> of total). 
+This is a controllable operational failure — fixable with supplier QC and sizing guides.
+</Alert>
+
 <BarChart
     data={returns_reason_summary}
     x=return_reason
@@ -199,6 +232,16 @@ Defective and wrong-size returns are operational failures; changed-mind returns 
     subtitle="Aggregated return volume by root cause"
     yAxisTitle="Return Count"
     yFmt="num0"
+/>
+
+<BarChart
+    data={returns_reason_pct}
+    x=return_reason
+    y=reason_pct
+    title="Return Reason Share"
+    subtitle="Percentage of total returns by root cause"
+    yAxisTitle="Share of Returns"
+    yFmt="0.0%"
 />
 
 ## Return Patterns
@@ -216,7 +259,9 @@ proactive quality checks before dispatch.
     subtitle="Pinpoints weekly return friction clusters"
     yAxisTitle="Return Rate"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
+</BarChart>
 
 <BarChart
     data={monthly_return_heatmap}

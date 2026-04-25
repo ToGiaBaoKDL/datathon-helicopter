@@ -10,6 +10,12 @@ This page monitors supply health and links it to growth trajectory.
 select sales_date from datathon_warehouse.mart_monthly_inventory_snapshot
 ```
 
+```sql stockout_overstock_overlap
+select count(*) as overlap_count
+from datathon_warehouse.mart_monthly_product_health
+where stockout_flag = 1 and overstock_flag = 1
+```
+
 <DateRange name=date_range data={_date_bounds} dates=sales_date/>
 
 ```sql inventory_daily
@@ -89,7 +95,7 @@ order by 1
 select
     extract(year from sales_date) as year,
     extract(month from sales_date) as month,
-    avg(avg_stockout_days) as avg_stockout_days
+    max(avg_stockout_days) as avg_stockout_days
 from datathon_warehouse.mart_monthly_inventory_snapshot
 where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as date))
   and sales_date <= cast('${inputs.date_range.end}' as date)
@@ -112,13 +118,13 @@ where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as dat
 ```
 
 <Alert status="warning">
-The business carries <b>~930 days of supply</b> on average — nearly 2.5 years of inventory. 
-With a sell-through rate of only 15.2%, working capital is severely tied up in slow-moving stock. 
+The business carries <b><Value data={inventory_kpis} column=avg_days_supply fmt=0/> days of supply</b> on average — multiple years of inventory. 
+With a sell-through rate of only <Value data={inventory_kpis} column=avg_sell_through fmt=pct1/>, working capital is severely tied up in slow-moving stock. 
 This is a bigger problem than stockouts.
 </Alert>
 
 <Alert status="positive">
-Action: Target 90 days of supply (industry standard). A reduction from 930 to 90 days would free 
+Action: Target 90 days of supply (industry standard). A reduction to 90 days would free 
 ~80% of inventory capital for reinvestment in marketing or product development.
 </Alert>
 
@@ -152,12 +158,12 @@ Action: Target 90 days of supply (industry standard). A reduction from 930 to 90
 ## Inventory Stockout Pressure
 
 <Alert status="info">
-Stockout days have improved from 1.36 (2012) to 1.09 (2022) — inventory availability is getting better, not worse. 
+Stockout days have improved gradually over the decade — inventory availability is getting better, not worse. 
 This rules out stockouts as the primary cause of revenue decline.
 </Alert>
 
 <Alert status="warning">
-~30,495 product-months have both stockout_flag = 1 and overstock_flag = 1 in raw data. 
+<Value data={stockout_overstock_overlap} column=overlap_count fmt=num0/> product-months have both stockout_flag = 1 and overstock_flag = 1 in raw data. 
 This suggests data quality issues in inventory classification, not necessarily operational paradox.
 </Alert>
 
@@ -191,9 +197,9 @@ Watch for revenue growth lagging order growth (discounting pressure) or outpacin
     y2AxisTitle="Order Growth"
     yFmt="0.0%"
     y2Fmt="0.0%"
-/>
-
-## Engagement Quality Trend
+>
+    <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
+</BarChart>
 
 ```sql engagement_daily
 select
@@ -206,9 +212,11 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
+## Engagement Quality Trend
+
 <Alert status="info">
-Bounce rate (~0.4%) is suspiciously low for e-commerce — typical is 20–50%. Pages per session (~4.3) is healthy. 
-If bounce rate is measured as "single-page sessions / all sessions", the 0.4% figure suggests 
+Bounce rate is suspiciously low for e-commerce — typical is 20–50%. Pages per session is healthy. 
+If bounce rate is measured as "single-page sessions / all sessions", the reported figure suggests 
 almost all visitors browse multiple pages. This is either exceptional engagement or a measurement definition issue.
 </Alert>
 
@@ -237,7 +245,7 @@ almost all visitors browse multiple pages. This is either exceptional engagement
 ## Conversion Trend
 
 <Alert status="warning">
-Session-to-order rate has collapsed from ~1.2% (2013) to ~0.3% (2022) — a 75% decline. 
+Session-to-order rate has collapsed by roughly three-quarters since 2013. 
 This is the dominant driver of revenue pressure. Traffic is flat; capture is broken.
 </Alert>
 
@@ -255,12 +263,15 @@ A +1pp conversion lift would project ~150% incremental revenue.
     yAxisTitle="Conversion Rate"
     xAxisTitle="Date"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine y=0.012 label="2013 Peak" hideValue=true color=positive lineType=dashed/>
+    <ReferenceLine y=0.003 label="2022 Low" hideValue=true color=negative lineType=dashed/>
+</LineChart>
 
 ## Conversion by Day of Week
 
 <Alert status="info">
-Wednesday has the highest conversion rate (~0.78%), while Saturday is the weakest (~0.67%). 
+Wednesday consistently shows the highest conversion rate, while Saturday is the weakest. 
 This contradicts the common weekend-peak assumption and has direct ad-spend implications.
 </Alert>
 
@@ -272,7 +283,9 @@ This contradicts the common weekend-peak assumption and has direct ad-spend impl
     subtitle="Weekly rhythm of traffic-to-order capture"
     yAxisTitle="Conversion Rate"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine y=0.005 label="0.5% Target" hideValue=true color=positive lineType=dashed/>
+</BarChart>
 
 ## Seasonal Stockout Pattern
 

@@ -18,6 +18,12 @@ select distinct category from datathon_warehouse.mart_product_lifetime_performan
 select distinct lifecycle_stage from datathon_warehouse.mart_product_lifetime_performance order by 1
 ```
 
+```sql negative_margin_count
+select count(*) as negative_margin_products
+from datathon_warehouse.mart_product_lifetime_performance
+where realized_margin_rate < 0 and lifecycle_stage != 'never_sold'
+```
+
 <DateRange
     name=date_range
     data={_date_bounds}
@@ -139,7 +145,7 @@ Lifecycle stages reveal portfolio vitality. "Active" products (sold within last 
 </Alert>
 
 <Alert status="warning">
-359 sold products have negative realized margin (COGS > net revenue after discounts), reflecting deep promotional discounting. 
+<Value data={negative_margin_count} column=negative_margin_products fmt=num0/> sold products have negative realized margin (COGS > net revenue after discounts), reflecting deep promotional discounting. 
 These SKUs destroy value on every sale — consider delisting or repricing.
 </Alert>
 

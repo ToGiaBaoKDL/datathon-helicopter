@@ -133,6 +133,13 @@ group by 1, 2
 order by 1
 ```
 
+```sql mean_conversion
+select avg(session_to_order_rate) as mean_conversion
+from datathon_warehouse.mart_daily_executive_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+  and sessions > 0
+```
+
 ```sql quarterly_summary
 select
     date_part('year', sales_date)::varchar || '-Q' || date_part('quarter', sales_date)::varchar as quarter_label,
@@ -165,6 +172,13 @@ from datathon_warehouse.mart_daily_executive_kpis
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 group by 1
 order by 1 desc
+```
+
+```sql month_end_diff
+select
+    max(case when day_type = 'Month-end (29-31)' then avg_revenue end) as month_end_revenue,
+    max(case when day_type = 'Other days' then avg_revenue end) as other_revenue
+from ${month_end_effect}
 ```
 
 ```sql what_if_conversion
@@ -204,6 +218,33 @@ from datathon_warehouse.mart_daily_executive_kpis
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 group by 1
 order by 1, 2
+```
+
+```sql conversion_peak
+select
+    max(case when avg_conversion = max_conv then year end) as peak_year,
+    max(max_conv) as peak_conversion,
+    min(case when avg_conversion = min_conv then year end) as trough_year,
+    min(min_conv) as trough_conversion
+from (
+    select
+        date_part('year', sales_date) as year,
+        avg(session_to_order_rate) as avg_conversion,
+        max(avg(session_to_order_rate)) over () as max_conv,
+        min(avg(session_to_order_rate)) over () as min_conv
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0
+    group by 1
+) t
+```
+
+```sql dow_best_worst
+select
+    max(case when day_name = 'Wed' then avg_conversion_rate end) as wed_conversion,
+    max(case when day_name = 'Wed' then avg_revenue end) as wed_revenue,
+    max(case when day_name = 'Sat' then avg_conversion_rate end) as sat_conversion,
+    max(case when day_name = 'Sat' then avg_revenue end) as sat_revenue
+from ${conversion_by_dow}
 ```
 
 ## Latest Snapshot
@@ -267,7 +308,6 @@ When 7-day crosses above 28-day, momentum is accelerating. When it crosses below
     y2Fmt="num0"
 />
 
-
 ## Rate Signals
 
 <Alert status="info">
@@ -276,7 +316,8 @@ Session-to-order rate measures demand capture efficiency. Return record rate is 
 </Alert>
 
 <Alert status="warning">
-Long-term trend: Conversion rate has declined from ~1.2% (2013) to ~0.3% (2022) — a 75% erosion in demand capture efficiency. 
+Long-term trend: Conversion rate peaked at <Value data={conversion_peak} column=peak_conversion fmt=pct2/> in <Value data={conversion_peak} column=peak_year/> 
+and troughed at <Value data={conversion_peak} column=trough_conversion fmt=pct2/> in <Value data={conversion_peak} column=trough_year/> — a severe erosion in demand capture efficiency. 
 This is the single biggest driver of revenue pressure despite flat traffic.
 </Alert>
 
@@ -290,7 +331,9 @@ This is the single biggest driver of revenue pressure despite flat traffic.
     xAxisTitle="Date"
     yAxisTitle="Rate"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine y=0.01 label="1% Benchmark" hideValue=true color=positive lineType=dashed/>
+</LineChart>
 
 ## Operational Risk Signals
 
@@ -300,8 +343,8 @@ Lower is better for both metrics.
 </Alert>
 
 <Alert status="positive">
-Stockout days have improved from 1.36 (2012) to 1.09 (2022) — inventory availability is getting better, not worse.
-Delivery time is stable at ~6 days across the entire period.
+Stockout days have improved gradually over the decade — inventory availability is getting better, not worse.
+Delivery time is stable around 6 days across the entire period.
 </Alert>
 
 <LineChart
@@ -314,12 +357,15 @@ Delivery time is stable at ~6 days across the entire period.
     xAxisTitle="Date"
     yAxisTitle="Risk Level"
     yFmt="0"
-/>
+>
+    <ReferenceLine y=7 label="7-Day SLA" hideValue=true color=warning/>
+</LineChart>
 
 ## Conversion Pattern by Day of Week
 
 <Alert status="info">
-Wednesday has the highest conversion rate (~0.78%) and revenue (~4.7M), while Saturday is the weakest (~0.67%, ~3.9M). 
+Wednesday conversion (<Value data={dow_best_worst} column=wed_conversion fmt=pct2/>) is <Value data={dow_best_worst} column=sat_conversion fmt=pct2/> on Saturday. 
+Revenue follows the same pattern: <Value data={dow_best_worst} column=wed_revenue fmt=num0/> VND vs <Value data={dow_best_worst} column=sat_revenue fmt=num0/> VND.
 This contradicts the common assumption that weekends perform best.
 </Alert>
 
@@ -336,12 +382,14 @@ Reduce weekend ad spend if traffic does not convert.
     subtitle="Wednesday peaks; weekend underperforms"
     yAxisTitle="Conversion Rate"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine data={mean_conversion} y=mean_conversion label="Avg" hideValue=true color=info/>
+</BarChart>
 
 ## Year-over-Year Trends
 
 <Alert status="info">
-Long-term structural view. Revenue peaked in 2016 (~5.8M/day) then declined to ~2.9M in 2020–2021 before a slight recovery. 
+Long-term structural view. Revenue peaked around 2016 then declined through 2020–2021 before a slight recovery. 
 The conversion decline is the dominant driver — traffic (sessions) is flat but capture rate has collapsed.
 </Alert>
 
@@ -355,7 +403,9 @@ The conversion decline is the dominant driver — traffic (sessions) is flat but
     xAxisTitle="Year"
     yAxisTitle="Rate"
     yFmt="0.0%"
-/>
+>
+    <ReferenceLine y=0.01 label="1% Benchmark" hideValue=true color=positive lineType=dashed/>
+</LineChart>
 
 ## What-If: Conversion Rate Impact
 
@@ -414,7 +464,7 @@ Some months consistently outperform others due to cultural events or weather-dri
 ## Month-End Effect
 
 <Alert status="info">
-Month-end days (29–31) average ~7.1M VND vs ~4.0M on other days — a structural demand boost. 
+Month-end days average <Value data={month_end_diff} column=month_end_revenue fmt=num0/> VND vs <Value data={month_end_diff} column=other_revenue fmt=num0/> VND on other days — a structural demand boost. 
 This is consistent with salary-cycle purchasing behavior in emerging markets.
 </Alert>
 

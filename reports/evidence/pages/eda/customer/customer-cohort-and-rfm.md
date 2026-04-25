@@ -58,7 +58,7 @@ limit 1
 select
     months_since_first_order,
     avg(retention_rate) as avg_retention_rate,
-    avg(avg_order_value) as avg_aov
+    sum(total_revenue) / sum(total_orders) as avg_aov
 from datathon_warehouse.mart_monthly_customer_cohort
 group by 1
 order by 1
@@ -106,6 +106,16 @@ select
 from ranked
 group by revenue_quartile
 order by avg_revenue desc
+```
+
+```sql churn_risk_total
+select
+    sum(case when recency_days > 2 * avg_days_between_orders then 1 else 0 end) as churned_customers,
+    sum(case when avg_days_between_orders is null then 1 else 0 end) as single_order_customers,
+    sum(case when recency_days <= avg_days_between_orders then 1 else 0 end) as active_customers,
+    sum(case when avg_days_between_orders is not null and recency_days > avg_days_between_orders and recency_days <= 2 * avg_days_between_orders then 1 else 0 end) as at_risk_customers,
+    count(*) as total_customers
+from datathon_warehouse.mart_customer_rfm
 ```
 
 ```sql churn_risk
@@ -204,13 +214,13 @@ Monitor month-0 retention and AOV to spot acquisition quality shifts early.
 ## Retention Curve
 
 <Alert status="info">
-Retention drops sharply to ~3.5% by month 1, then stabilizes around ~3.2%. 
+Retention drops sharply by month 1, then stabilizes at a low floor. 
 This is a classic e-commerce pattern — most customers never return after their first purchase.
 </Alert>
 
 <Alert status="warning">
-The 20% benchmark is far above actual performance. The realistic target for month-6 retention is ~3%.
-Focus on increasing first-repeat rate (month 1) rather than long-term retention.
+The 20% benchmark is far above actual performance. The realistic target is improving month-1 retention first.
+Focus on increasing first-repeat rate rather than long-term retention.
 </Alert>
 
 <LineChart
@@ -265,12 +275,12 @@ and columns where all rows stabilize (baseline retention floor).
 
 <Alert status="info">
 CLV tiers are quartile-based (Platinum = top 25% by revenue). 
-Platinum customers generate 68% of total revenue despite being only 25% of the base — a classic Pareto distribution.
+Platinum customers (top quartile by lifetime revenue) generate the vast majority of total revenue — a classic Pareto distribution.
 </Alert>
 
 <Alert status="positive">
-Action: Prioritize retention for Platinum and Gold. A 5% churn in Platinum = ~560M VND lost, 
-more than a 50% churn in Bronze (~175M VND).
+Action: Prioritize retention for Platinum and Gold. A small churn in Platinum equates to more revenue at risk 
+than a large churn in Bronze.
 </Alert>
 
 <BarChart
@@ -296,8 +306,9 @@ more than a 50% churn in Bronze (~175M VND).
 ## Churn Risk Segments
 
 <Alert status="info">
-28,041 customers (31%) are "Churned" — no order in 2× their normal gap. 
-22,358 (25%) are "Single Order" — never returned after first purchase. These are distinct problems requiring different tactics.
+<Value data={churn_risk_total} column=churned_customers fmt=num0/> customers are "Churned" — no order in 2× their normal gap. 
+<Value data={churn_risk_total} column=single_order_customers fmt=num0/> are "Single Order" — never returned after first purchase. 
+These are distinct problems requiring different tactics.
 </Alert>
 
 <Alert status="positive">
@@ -342,7 +353,7 @@ order by 1, 2
 
 <Alert status="info">
 Retention quality varies dramatically by acquisition channel. 
-<b>Direct</b> and <b>referral</b> customers have ~2× higher month-1 retention than <b>organic search</b> and <b>paid search</b>.
+<b>Direct</b> and <b>referral</b> customers show markedly higher month-1 retention than <b>organic search</b> and <b>paid search</b>.
 This suggests intent quality: customers who seek out the brand directly are more committed than browsers from search ads.
 </Alert>
 
@@ -381,7 +392,7 @@ order by 1, 2
 ```
 
 <Alert status="info">
-<b>55+ customers</b> have the highest month-1 retention (~11.5%), while <b>25–34</b> is the weakest (~7.5%). 
+<b>55+ customers</b> have the highest month-1 retention, while <b>25–34</b> is the weakest. 
 Older customers are more loyal but represent a smaller segment — the opportunity is improving retention in the largest group (25–34).
 </Alert>
 
@@ -402,8 +413,8 @@ Older customers are more loyal but represent a smaller segment — the opportuni
 ## Acquisition Channel Performance
 
 <Alert status="info">
-Social media and organic search drive the highest average revenue per customer (~184K VND). 
-All channels are remarkably close in performance (178K–184K), suggesting product-market fit is consistent across sources.
+Social media and organic search drive the highest average revenue per customer. 
+All channels are remarkably close in performance, suggesting product-market fit is consistent across sources.
 </Alert>
 
 <BarChart

@@ -18,6 +18,12 @@ select distinct category from datathon_warehouse.mart_monthly_category_performan
 select distinct region from datathon_warehouse.mart_weekly_region_performance order by 1
 ```
 
+```sql negative_margin_count
+select count(*) as negative_margin_products
+from datathon_warehouse.mart_product_lifetime_performance
+where realized_margin_rate < 0 and lifecycle_stage != 'never_sold'
+```
+
 <DateRange
     name=date_range
     data={_date_bounds}
@@ -100,7 +106,7 @@ the 15% target margin may need repricing, cost reduction, or SKU rationalization
 </Alert>
 
 <Alert status="warning">
-359 products have negative realized margin due to deep discounting. These SKUs drag down category averages 
+<Value data={negative_margin_count} column=negative_margin_products fmt=num0/> products have negative realized margin due to deep discounting. These SKUs drag down category averages 
 and should be reviewed for delisting or repricing.
 </Alert>
 

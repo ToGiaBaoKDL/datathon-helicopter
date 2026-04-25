@@ -4,12 +4,27 @@ title: Executive Summary
 
 # Executive Summary
 
-One-page overview of top insights, risks, and recommended actions based on 3,833 days of operational data.
+One-page overview of top insights, risks, and recommended actions based on <Value data={dataset_meta} column=total_days fmt=num0/> days of operational data.
+
+```sql dataset_meta
+select count(*) as total_days from datathon_warehouse.mart_daily_executive_kpis
+```
+
+```sql _date_bounds
+select sales_date from datathon_warehouse.mart_daily_executive_kpis
+```
+
+<DateRange
+    name=date_range
+    data={_date_bounds}
+    dates=sales_date
+/>
 
 ```sql top_insights
 with numbered as (
     select revenue, row_number() over (order by sales_date) as rn
     from datathon_warehouse.mart_daily_executive_kpis
+    where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 )
 select
     case
@@ -28,7 +43,7 @@ select
     acquisition_channel,
     sum(total_revenue) as channel_revenue,
     sum(total_revenue) / sum(sum(total_revenue)) over () as revenue_pct,
-    avg(total_revenue - total_cogs) / nullif(avg(total_revenue), 0) as avg_margin
+    sum(total_revenue - total_cogs) / nullif(sum(total_revenue), 0) as avg_margin
 from datathon_warehouse.mart_customer_rfm
 group by 1
 order by channel_revenue desc
@@ -41,6 +56,8 @@ select
     sum(case when recency_days > 2 * avg_days_between_orders then 1 else 0 end)::double / count(*) as churned_pct,
     sum(case when avg_days_between_orders is not null and recency_days > avg_days_between_orders and recency_days <= 2 * avg_days_between_orders then 1 else 0 end)::double / count(*) as at_risk_pct,
     sum(case when avg_days_between_orders is null then 1 else 0 end)::double / count(*) as single_order_pct,
+    sum(case when avg_days_between_orders is null then 1 else 0 end)::int as single_order_customers,
+    sum(case when recency_days > 2 * avg_days_between_orders then 1 else 0 end)::int as churned_customers,
     count(*) as total_customers
 from datathon_warehouse.mart_customer_rfm
 ```
@@ -71,12 +88,28 @@ where sales_date >= max_date.d - interval '30 days'
 ```sql promo_roi
 select
     promo_type,
-    avg(total_net_revenue / nullif(total_discount_amount, 0)) as roi,
+    sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
     avg(discount_rate) as avg_discount_rate,
     count(*) as campaigns
 from datathon_warehouse.mart_promotion_effectiveness
 group by 1
 order by roi desc
+```
+
+```sql promo_stats
+select
+    max(case when promo_type = 'fixed' then campaigns end) as fixed_campaigns,
+    max(case when promo_type = 'fixed' then roi end) as fixed_roi,
+    max(case when promo_type = 'percentage' then campaigns end) as pct_campaigns,
+    max(case when promo_type = 'percentage' then roi end) as pct_roi
+from (
+    select
+        promo_type,
+        sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
+        count(*) as campaigns
+    from datathon_warehouse.mart_promotion_effectiveness
+    group by 1
+) t
 ```
 
 ```sql trend_summary
@@ -88,8 +121,75 @@ select
     avg(return_record_rate) as avg_return_rate
 from datathon_warehouse.mart_daily_executive_kpis
 where sessions > 0
+  and sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 group by 1
 order by 1
+```
+
+```sql conversion_peak
+select
+    max(case when avg_conversion = max_conv then year end) as peak_year,
+    max(max_conv) as peak_conversion,
+    min(case when avg_conversion = min_conv then year end) as trough_year,
+    min(min_conv) as trough_conversion
+from (
+    select
+        date_part('year', sales_date) as year,
+        avg(session_to_order_rate) as avg_conversion,
+        max(avg(session_to_order_rate)) over () as max_conv,
+        min(avg(session_to_order_rate)) over () as min_conv
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0
+      and sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+    group by 1
+) t
+```
+
+```sql margin_peak
+select
+    max(case when avg_margin = max_margin then year end) as peak_year,
+    max(max_margin) as peak_margin,
+    min(case when avg_margin = min_margin then year end) as trough_year,
+    min(min_margin) as trough_margin
+from (
+    select
+        date_part('year', sales_date) as year,
+        avg(gross_margin_rate) as avg_margin,
+        max(avg(gross_margin_rate)) over () as max_margin,
+        min(avg(gross_margin_rate)) over () as min_margin
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+    group by 1
+) t
+```
+
+```sql retention_m1
+select avg(retention_rate) as m1_retention
+from datathon_warehouse.mart_monthly_customer_cohort
+where months_since_first_order = 1
+```
+
+```sql return_overall
+select avg(return_record_rate) as avg_return_rate
+from datathon_warehouse.mart_daily_executive_kpis
+```
+
+```sql negative_margin_count
+select count(*) as negative_margin_products
+from datathon_warehouse.mart_product_lifetime_performance
+where realized_margin_rate < 0 and lifecycle_stage != 'never_sold'
+```
+
+```sql revenue_peak
+select
+    date_part('year', sales_date) as peak_year,
+    avg(revenue) as peak_avg_revenue
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
+  and sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+group by 1
+order by peak_avg_revenue desc
+limit 1
 ```
 
 ## Top 5 Insights
@@ -97,14 +197,13 @@ order by 1
 <Alert status="info">
 <b>1. Revenue Direction</b>: Long-term trend is <Value data={top_insights} column=direction/> 
 (<Value data={top_insights} column=daily_change fmt=num0/> VND/day slope, R² = <Value data={top_insights} column=r2 fmt=pct1/>).
-<br/><i>Revenue peaked in 2016 (~5.8M/day) then declined to ~2.9M in 2020–2021. The trend is weakly negative with high volatility.</i>
+<br/><i>Revenue peaked in <Value data={revenue_peak} column=peak_year/> at <Value data={revenue_peak} column=peak_avg_revenue fmt=num0/> VND/day average, then declined through 2020–2021.</i>
 </Alert>
 
 <Alert status="info">
 <b>2. Best Channel</b>: <Value data={best_channel} column=acquisition_channel/> 
 generates <Value data={best_channel} column=revenue_pct fmt=pct1/> of revenue 
 with <Value data={best_channel} column=avg_margin fmt=pct1/> margin.
-<br/><i>However, all channels are within 1pp in margin (13.6–13.9%) — the business is not channel-dependent for profitability.</i>
 </Alert>
 
 <Alert status="info">
@@ -112,82 +211,91 @@ with <Value data={best_channel} column=avg_margin fmt=pct1/> margin.
 <Value data={customer_health} column=at_risk_pct fmt=pct1/> at-risk, 
 <Value data={customer_health} column=churned_pct fmt=pct1/> churned, 
 <Value data={customer_health} column=single_order_pct fmt=pct1/> single-order only.
-<br/><i>The biggest opportunity is converting single-order customers (22,358 customers, ~25%) to repeat buyers before they go cold.</i>
+<br/><i>The biggest opportunity: <Value data={customer_health} column=single_order_customers fmt=num0/> single-order customers (<Value data={customer_health} column=single_order_pct fmt=pct0/>) never returned.</i>
 </Alert>
 
 <Alert status="info">
-<b>4. Operational Risk</b>: Avg <Value data={operational_risk} column=avg_stockout fmt=0.00/> stockout days, 
+<b>4. Operational Risk</b>: Last 30 days avg <Value data={operational_risk} column=avg_stockout fmt=0.00/> stockout days, 
 <Value data={operational_risk} column=avg_delivery_days fmt=0.0/> delivery days.
-<br/><i>Stockout has improved from 1.36 (2012) to 1.09 (2022). Delivery is stable at ~6 days. Operations are not the bottleneck.</i>
+<br/><i>Delivery is stable. Operations are not the bottleneck.</i>
 </Alert>
 
 <Alert status="info">
 <b>5. Promotion ROI</b>: <Value data={promo_roi} column=promo_type/> promos yield highest ROI 
-(<Value data={promo_roi} column=roi fmt=0.0x/> revenue per discount VND) but only 5 campaigns.
-<br/><i>Percentage promos (45 campaigns) have lower ROI (7.2x) but much higher scale. Discount rate averages 12.9% vs 1.2% for fixed.</i>
+(<Value data={promo_roi} column=roi fmt=0.0x/> revenue per discount VND).
+<br/><i>Fixed promos (<Value data={promo_stats} column=fixed_campaigns fmt=0/> campaigns) achieve <Value data={promo_stats} column=fixed_roi fmt=0.0x/> ROI vs <Value data={promo_stats} column=pct_roi fmt=0.0x/> for percentage promos (<Value data={promo_stats} column=pct_campaigns fmt=0/> campaigns).</i>
 </Alert>
 
 ## Top 5 Risks
 
 <Alert status="warning">
-<b>1. Conversion Collapse</b>: Session-to-order rate fell from 1.2% (2013) to 0.3% (2022) — a 75% decline. 
-This is the single biggest threat to revenue. Traffic is flat; capture is broken.
+<b>1. Conversion Collapse</b>: Session-to-order rate peaked at <Value data={conversion_peak} column=peak_conversion fmt=pct2/> in <Value data={conversion_peak} column=peak_year/> and fell to <Value data={conversion_peak} column=trough_conversion fmt=pct2/> in <Value data={conversion_peak} column=trough_year/>.
+Traffic is flat; capture is broken.
 </Alert>
 
 <Alert status="warning">
 <b>2. Conversion Drop Flags</b>: <Value data={risk_flags} column=conversion_drop_days/> days in last 30 
 below the p10 threshold.
-<br/><i>Action: Audit checkout flow, page load speed, and mobile experience. The decline is structural, not seasonal.</i>
+<br/><i>Action: Audit checkout flow, page load speed, and mobile experience.</i>
 </Alert>
 
 <Alert status="warning">
 <b>3. Return Spike</b>: <Value data={risk_flags} column=return_spike_days/> days in last 30 
 with return rate above p95.
-<br/><i>Action: Inspect return reasons — "defective" and "wrong_size" are fixable with supplier QC and sizing guides.</i>
+<br/><i>Action: Inspect return reasons — "defective" and "wrong_size" are fixable.</i>
 </Alert>
 
 <Alert status="warning">
-<b>4. Margin Volatility</b>: Gross margin swings from 8% (2021) to 21% (2012) with no clear pattern. 
-359 products have negative realized margin due to deep discounting.
+<b>4. Margin Volatility</b>: Gross margin peaked at <Value data={margin_peak} column=peak_margin fmt=pct1/> in <Value data={margin_peak} column=peak_year/> and troughed at <Value data={margin_peak} column=trough_margin fmt=pct1/> in <Value data={margin_peak} column=trough_year/>.
+<Value data={negative_margin_count} column=negative_margin_products fmt=0/> products have negative realized margin due to deep discounting.
 </Alert>
 
 <Alert status="warning">
-<b>5. Cohort Quality</b>: Month-1 retention is only ~3.5%. Most customers never return after their first purchase. 
-The business is essentially running a continuous acquisition treadmill.
+<b>5. Cohort Quality</b>: Month-1 retention is <Value data={retention_m1} column=m1_retention fmt=pct2/>.
+Most customers never return after their first purchase.
 </Alert>
 
 ## Recommended Actions
 
 <Alert status="positive">
-<b>Fix Conversion (Priority #1)</b>: A +1 percentage point conversion uplift projects ~150% revenue increase (~6.4M incremental/day at current averages). 
-Focus on: mobile checkout friction, page load speed, and payment method coverage.
+<b>Fix Conversion (Priority #1)</b>: Conversion fell from <Value data={conversion_peak} column=peak_conversion fmt=pct2/> to <Value data={conversion_peak} column=trough_conversion fmt=pct2/>.
+A +1pp lift would project massive incremental revenue at current traffic.
 </Alert>
 
 <Alert status="positive">
-<b>Re-engage Single-Order Customers</b>: 22,358 customers bought once and never returned. 
+<b>Re-engage Single-Order Customers</b>: <Value data={customer_health} column=single_order_customers fmt=num0/> customers bought once and never returned. 
 Send a time-limited "second purchase" offer within 30 days of first order.
 </Alert>
 
 <Alert status="positive">
-<b>Optimize Promo Mix</b>: Fixed-discount campaigns have 11× higher ROI than percentage (82x vs 7.2x) but only 5 campaigns ran. 
-Test expanding fixed-discount promos for high-margin categories.
+<b>Optimize Promo Mix</b>: Fixed promos deliver <Value data={promo_stats} column=fixed_roi fmt=0.0x/> ROI vs <Value data={promo_stats} column=pct_roi fmt=0.0x/> for percentage.
+Test expanding fixed-discount campaigns.
 </Alert>
 
 <Alert status="positive">
-<b>Shift Ad Spend to Weekdays</b>: Wednesday has the highest conversion (0.78%) and revenue (~4.7M). 
-Saturday is the weakest (0.67%, ~3.9M). Reallocate weekend budget to Tue–Thu.
+<b>Shift Ad Spend to Weekdays</b>: Wednesday outperforms Saturday in conversion and revenue.
+Reallocate weekend budget to Tue–Thu.
 </Alert>
 
 <Alert status="positive">
-<b>Reduce Return Rate</b>: ~5.5% of orders have returns. Focus on "defective" and "wrong_size" root causes — 
-these are controllable unlike "changed_mind".
+<b>Reduce Return Rate</b>: Average return rate is <Value data={return_overall} column=avg_return_rate fmt=pct1/>.
+Focus on "defective" and "wrong_size" root causes.
 </Alert>
 
 ## Trend Detail
 
-<Alert status="info">
-Yearly averages for deep-dive. Compare year-over-year changes to spot inflection points. 
-2016 marks the peak; 2019–2022 shows the conversion collapse in full effect.
-</Alert>
+<LineChart
+    data={trend_summary}
+    x=year
+    y=avg_conversion
+    title="Annual Conversion Rate Trend"
+    subtitle="Demand capture efficiency collapsed after 2013"
+    yAxisTitle="Conversion Rate"
+    xAxisTitle="Year"
+    yFmt="0.00%"
+>
+    <ReferenceLine data={conversion_peak} y=peak_conversion label="Peak" hideValue=true color=positive lineType=dashed/>
+    <ReferenceLine data={conversion_peak} y=trough_conversion label="Trough" hideValue=true color=negative lineType=dashed/>
+</LineChart>
 
 <DataTable data={trend_summary} rows=15 />

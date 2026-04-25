@@ -168,31 +168,6 @@ order by 1
     y2Fmt="num0"
 />
 
-```sql q4_dow_pattern
-select
-    extract(dow from sales_date) as dow,
-    case extract(dow from sales_date)
-        when 0 then 'Sun' when 1 then 'Mon' when 2 then 'Tue'
-        when 3 then 'Wed' when 4 then 'Thu' when 5 then 'Fri' when 6 then 'Sat'
-    end as day_name,
-    avg(session_to_order_rate) as conversion_rate,
-    avg(revenue)/1e6 as revenue_m
-from datathon_warehouse.mart_daily_executive_kpis
-where sessions > 0
-group by 1, 2
-order by 1
-```
-
-<BarChart
-    data={q4_dow_pattern}
-    x=day_name
-    y=conversion_rate
-    title="Conversion Rate by Day of Week"
-    subtitle="Wednesday peaks; weekend underperforms"
-    yAxisTitle="Conversion Rate"
-    yFmt="0.00%"
-/>
-
 ### Q5: What is the revenue per visitor trend?
 
 **Belongs to**: Executive Summary
@@ -555,7 +530,7 @@ select
     promo_type,
     count(*) as campaigns,
     sum(total_net_revenue)/1e9 as revenue_b,
-    avg(total_net_revenue / nullif(total_discount_amount, 0)) as roi,
+    sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
     avg(discount_rate) as avg_discount
 from datathon_warehouse.mart_promotion_effectiveness
 where total_orders > 0

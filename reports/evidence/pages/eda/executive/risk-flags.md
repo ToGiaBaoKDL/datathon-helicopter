@@ -50,9 +50,34 @@ order by sales_date, flag_type
 select
     sum(stockout_risk_flag) as stockout_risk_days,
     sum(return_spike_flag) as return_spike_days,
-    sum(conversion_drop_flag) as conversion_drop_days
+    sum(conversion_drop_flag) as conversion_drop_days,
+    count(*) as total_days
 from datathon_warehouse.mart_daily_risk_flags
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+```
+
+```sql flag_frequency
+select
+    'Conversion Drop' as flag_type,
+    sum(conversion_drop_flag) as flag_count,
+    sum(conversion_drop_flag)::double / count(*) as flag_pct
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select
+    'Return Spike',
+    sum(return_spike_flag),
+    sum(return_spike_flag)::double / count(*)
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select
+    'Stockout Risk',
+    sum(stockout_risk_flag),
+    sum(stockout_risk_flag)::double / count(*)
+from datathon_warehouse.mart_daily_risk_flags
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by flag_count desc
 ```
 
 ## Alert Overview
@@ -63,7 +88,7 @@ A flag = 1 means the day was an extreme outlier — not just a bad day, but a st
 </Alert>
 
 <Alert status="warning">
-<b>Conversion drop</b> is the most frequent flag and the most dangerous. Days below p10 conversion 
+<b>Conversion drop</b> is the most frequent flag (<Value data={flag_frequency} column=flag_count fmt=0/> days, <Value data={flag_frequency} column=flag_pct fmt=pct1/> of selected period) and the most dangerous. Days below p10 conversion 
 are bleeding revenue despite normal traffic. This is a structural problem, not a seasonal blip.
 </Alert>
 
@@ -109,7 +134,9 @@ Timeline view reveals clustering — multiple flags on consecutive days suggest 
     yAxisTitle="Flag (0 = normal, 1 = triggered)"
     xAxisTitle="Date"
     yFmt="0"
-/>
+>
+    <ReferenceLine y=1 label="Triggered" hideValue=true color=negative/>
+</LineChart>
 
 ## Daily Detail
 

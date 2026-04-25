@@ -20,13 +20,16 @@ End-to-end forecasting pipeline for daily revenue and COGS (548-day horizon).
 # 1. Install dependencies
 uv sync --extra dev
 
-# 2. Download raw data & build DuckDB warehouse
+# 2. Download raw data from Kaggle (skip if you already have CSVs)
+uv run datathon download-data
+
+# 3. Build DuckDB warehouse from raw CSVs
 uv run datathon build-raw --strict
 
-# 3. Run dbt pipeline (models + tests)
+# 4. Run dbt pipeline (models + tests)
 uv run dbt build --project-dir dbt --profiles-dir dbt
 
-# 4. Tune all models → merge configs → compare & submit
+# 5. Tune all models → merge configs → compare & submit
 uv run datathon tune --model-type lightgbm --n-trials 50
 uv run datathon tune --model-type xgboost   --n-trials 50
 uv run datathon tune --model-type catboost  --n-trials 50

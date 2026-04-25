@@ -49,12 +49,23 @@ select
     sum(total_orders) as total_orders,
     sum(total_net_revenue) as total_revenue,
     avg(discount_rate) as avg_discount_rate,
-    avg(avg_order_value) as avg_aov
+    sum(total_net_revenue) / sum(total_orders) as avg_aov
 from datathon_warehouse.mart_promotion_effectiveness
 where promo_type in ${inputs.type_filter.value}
   and promo_channel in ${inputs.channel_filter.value}
 group by 1
 order by total_revenue desc
+```
+
+```sql promo_type_pivot
+select
+    max(case when promo_type = 'percentage' then campaigns end) as pct_campaigns,
+    max(case when promo_type = 'percentage' then total_revenue end) as pct_revenue,
+    max(case when promo_type = 'percentage' then avg_discount_rate end) as pct_discount_rate,
+    max(case when promo_type = 'fixed' then campaigns end) as fixed_campaigns,
+    max(case when promo_type = 'fixed' then total_revenue end) as fixed_revenue,
+    max(case when promo_type = 'fixed' then avg_discount_rate end) as fixed_discount_rate
+from ${promo_summary}
 ```
 
 ```sql promo_timeline
@@ -76,6 +87,7 @@ order by start_date
 ```sql promo_vs_discount
 select
     promo_name,
+    promo_type,
     discount_rate,
     total_net_revenue as total_revenue,
     total_orders
@@ -141,12 +153,12 @@ order by 1
 ## Promo Type Summary
 
 <Alert status="info">
-Percentage promos (45 campaigns) drive ~5B VND revenue at 12.9% average discount rate. 
-Fixed promos (5 campaigns) drive ~376M VND at only 1.2% rate. Scale vs efficiency trade-off is clear.
+Percentage promos (<Value data={promo_type_pivot} column=pct_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=pct_revenue fmt=num0/> VND revenue at <Value data={promo_type_pivot} column=pct_discount_rate fmt=pct1/> average discount rate. 
+Fixed promos (<Value data={promo_type_pivot} column=fixed_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=fixed_revenue fmt=num0/> VND at <Value data={promo_type_pivot} column=fixed_discount_rate fmt=pct1/> rate. Scale vs efficiency trade-off is clear.
 </Alert>
 
 <Alert status="positive">
-Action: Fixed-discount campaigns have 11× higher ROI than percentage discounts. 
+Action: Fixed-discount campaigns show significantly higher ROI per discount VND than percentage campaigns, but with far fewer runs. 
 Test expanding fixed-discount promos for high-margin categories where discount depth matters less.
 </Alert>
 
@@ -170,41 +182,6 @@ Test expanding fixed-discount promos for high-margin categories where discount d
     yFmt="0.0%"
 />
 
-## Campaign Efficiency Scatter
-
-```sql campaign_scatter
-select
-    promo_name,
-    promo_type,
-    discount_rate,
-    total_net_revenue as total_revenue,
-    total_orders,
-    total_discount_amount as total_discount,
-    avg_order_value
-from datathon_warehouse.mart_promotion_effectiveness
-where total_orders > 0
-  and promo_type in ${inputs.type_filter.value}
-  and promo_channel in ${inputs.channel_filter.value}
-```
-
-<Alert status="info">
-Each dot is a campaign. Position reveals efficiency: top-left = low discount, high revenue (ideal); 
-bottom-right = deep discount, low revenue (margin destroyer).
-</Alert>
-
-<ScatterPlot
-    data={campaign_scatter}
-    x=discount_rate
-    y=total_revenue
-    series=promo_type
-    title="Campaign Efficiency: Discount vs Revenue"
-    subtitle="Top-left = efficient promos; bottom-right = margin destroyers"
-    xAxisTitle="Discount Rate"
-    yAxisTitle="Net Revenue"
-    xFmt="0.0%"
-    yFmt="num0"
-/>
-
 ## Campaign Timeline
 
 <Alert status="info">
@@ -222,8 +199,8 @@ select
     count(*) as campaigns,
     sum(total_net_revenue) as total_revenue,
     avg(discount_rate) as avg_discount_rate,
-    avg(total_net_revenue / nullif(total_discount_amount, 0)) as roi,
-    avg(avg_order_value) as avg_aov
+    sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
+    sum(total_net_revenue) / sum(total_orders) as avg_aov
 from datathon_warehouse.mart_promotion_effectiveness
 where total_orders > 0
   and promo_type in ${inputs.type_filter.value}
@@ -249,12 +226,12 @@ order by applicable_category, total_revenue desc
 ```
 
 <Alert status="info">
-<b>Category-restricted promotions</b> (Streetwear, Outdoor) show different efficiency profiles than <b>site-wide</b> campaigns. 
+<b>Category-restricted promotions</b> show different efficiency profiles than <b>site-wide</b> campaigns. 
 Category promos typically have higher AOV but lower total scale — they attract buyers with existing category intent.
 </Alert>
 
 <Alert status="positive">
-Action: Streetwear promos yield higher AOV than Outdoor. Test category-specific campaigns for high-margin segments 
+Action: Test category-specific campaigns for high-margin segments 
 rather than always defaulting to site-wide percentage discounts.
 </Alert>
 
@@ -301,15 +278,17 @@ where deep discounts (>20%) fail to lift revenue proportionally — classic marg
     data={promo_vs_discount}
     x=discount_rate
     y=total_revenue
+    series=promo_type
     size=total_orders
-    title="Discount Rate vs Campaign Revenue"
-    subtitle="Bubble size = total orders"
+    title="Campaign Efficiency: Discount vs Revenue"
+    subtitle="Bubble size = total orders. Top-left = efficient; bottom-right = margin destroyers"
     xAxisTitle="Discount Rate"
     yAxisTitle="Net Revenue"
     xFmt="0.0%"
     yFmt="num0"
 >
     <ReferenceLine data={avg_discount} x=avg_discount label="Avg Discount" hideValue=true color=info/>
+    <ReferenceArea xMin=0.20 label="Diminishing Returns" color=warning opacity=0.18/>
 </ScatterPlot>
 
 ## Channel Breakdown

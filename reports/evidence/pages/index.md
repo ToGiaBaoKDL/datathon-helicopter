@@ -12,18 +12,20 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [Executive Summary](./eda/executive/executive-summary)
 - [Executive KPI Pulse](./eda/executive/executive-kpi-pulse)
 - [Risk Flags](./eda/executive/risk-flags)
-- [Part 1 MCQ Metrics](./eda/executive/part1-mcq-metrics)
 
 ### Finance
 - [Revenue and Business Drivers](./eda/finance/revenue-and-drivers)
-- [Forecast Feature Health](./eda/finance/forecast-feature-health)
+- [Payment and Checkout](./eda/finance/payment-and-checkout)
+- [Seasonal Decomposition](./eda/finance/seasonal-decomposition)
 
 ### Operations
 - [Fulfillment and Returns](./eda/operations/fulfillment-and-returns)
 - [Inventory and Growth Scorecard](./eda/operations/inventory-and-growth-scorecard)
+- [Geographic Fulfillment](./eda/operations/geographic-fulfillment)
 
 ### Marketing
 - [Promotion Effectiveness](./eda/marketing/promotion-effectiveness)
+- [Conversion Funnel](./eda/marketing/conversion-funnel)
 
 ### Customer
 - [Customer Cohort and RFM](./eda/customer/customer-cohort-and-rfm)
@@ -31,9 +33,12 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 ### Product
 - [Product Lifecycle and Health](./eda/product/product-lifecycle-and-health)
 - [Category and Region Performance](./eda/product/category-and-region-performance)
+- [Reviews and Quality](./eda/product/reviews-and-quality)
 
-### Research
-- [Analytical Questions & Findings](./eda/analytical-questions)
+### Appendix
+- [Analytical Questions & Findings](./eda/appendix/analytical-questions)
+- [Part 1 MCQ Metrics](./eda/appendix/part1-mcq-metrics)
+- [Forecast Feature Health](./eda/appendix/forecast-feature-health)
 
 ## Data Build Order
 

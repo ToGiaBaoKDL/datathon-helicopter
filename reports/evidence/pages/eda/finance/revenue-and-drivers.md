@@ -138,19 +138,70 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 ```
 
 ```sql anomaly_summary
-with flagged as (
+with bounds as (
     select
-        sales_date,
-        revenue,
-        case
-            when revenue > avg(revenue) over () + 2 * stddev_samp(revenue) over () then 'spike'
-            when revenue < avg(revenue) over () - 2 * stddev_samp(revenue) over () then 'drop'
-            else 'normal'
-        end as anomaly_flag
+        avg(revenue) as mean_revenue,
+        stddev_samp(revenue) as sd_revenue
     from datathon_warehouse.mart_forecast_daily_base
     where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+),
+flagged as (
+    select
+        d.sales_date,
+        d.revenue,
+        case
+            when d.revenue > b.mean_revenue + 2 * b.sd_revenue then 'spike'
+            when d.revenue < b.mean_revenue - 2 * b.sd_revenue then 'drop'
+            else 'normal'
+        end as anomaly_flag
+    from datathon_warehouse.mart_forecast_daily_base d
+    cross join bounds b
+    where d.sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 )
 select sales_date, revenue, anomaly_flag from flagged where anomaly_flag != 'normal' order by sales_date
+```
+
+```sql conversion_peak
+select
+    max(case when avg_conversion = max_conv then year end) as peak_year,
+    max(max_conv) as peak_conversion,
+    min(case when avg_conversion = min_conv then year end) as trough_year,
+    min(min_conv) as trough_conversion
+from (
+    select
+        date_part('year', sales_date) as year,
+        avg(session_to_order_rate) as avg_conversion,
+        max(avg(session_to_order_rate)) over () as max_conv,
+        min(avg(session_to_order_rate)) over () as min_conv
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0
+    group by 1
+) t
+```
+
+```sql mean_revenue_dow
+select avg(revenue) as mean_revenue
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+```
+
+```sql dow_revenue_best_worst
+select
+    max(case when day_name = 'Wed' then avg_revenue end) as wed_revenue,
+    max(case when day_name = 'Sat' then avg_revenue end) as sat_revenue
+from ${revenue_heatmap_dow}
+```
+
+```sql mean_return_units
+select avg(return_units) as mean_return_units
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+```
+
+```sql mean_discount
+select avg(total_discount_amount) as mean_discount
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 ```
 
 ## Revenue Trend
@@ -161,9 +212,9 @@ Revenue trend slope: <Value data={revenue_trend} column=daily_slope fmt=num0/> V
 </Alert>
 
 <Alert status="warning">
-R² = 8.8% means the linear model explains almost nothing. The real story is a <b>structural break</b>: 
-revenue rose to a peak in 2016 (~5.75M/day) then collapsed after 2018 to ~2.9M/day — a 50% drop. 
-This is not gradual decline; it's a regime change. The cause: conversion collapse (1.2% → 0.3%), not traffic loss.
+R² = <Value data={revenue_trend} column=r2 fmt=pct1/> means the linear model explains almost nothing. The real story is a <b>structural break</b>: 
+revenue rose to a peak around <Value data={conversion_peak} column=peak_year/> then collapsed — a dramatic drop. 
+This is not gradual decline; it's a regime change. The cause: conversion collapse from <Value data={conversion_peak} column=peak_conversion fmt=pct2/> to <Value data={conversion_peak} column=trough_conversion fmt=pct2/>, not traffic loss.
 </Alert>
 
 <AreaChart
@@ -230,7 +281,9 @@ Sustained increases suggest root causes in fulfillment, sizing, or defects.
     title="Daily Return Units"
     subtitle="Quality signal from return volume"
     yFmt="num0"
-/>
+>
+    <ReferenceLine data={mean_return_units} y=mean_return_units label="Avg" hideValue=true color=info/>
+</LineChart>
 
 ## Discount Pressure
 
@@ -249,12 +302,14 @@ into whether the lift justifies the margin sacrifice.
     title="Daily Discount Amount"
     subtitle="Promotional spend trend"
     yFmt="num0"
-/>
+>
+    <ReferenceLine data={mean_discount} y=mean_discount label="Avg" hideValue=true color=info/>
+</AreaChart>
 
 ## Revenue Pattern by Day of Week
 
 <Alert status="info">
-Wednesday has the highest average revenue (~4.7M VND), while Saturday is the weakest (~3.9M). 
+Wednesday averages <Value data={dow_revenue_best_worst} column=wed_revenue fmt=num0/> VND, while Saturday averages <Value data={dow_revenue_best_worst} column=sat_revenue fmt=num0/> VND. 
 This contradicts the common assumption that weekends drive peak trading. 
 Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak demand days.
 </Alert>
@@ -267,7 +322,9 @@ Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak deman
     subtitle="Reveals intra-week trading patterns"
     yAxisTitle="Avg Revenue"
     yFmt="num0"
-/>
+>
+    <ReferenceLine data={mean_revenue_dow} y=mean_revenue label="Avg" hideValue=true color=info/>
+</BarChart>
 
 ## Daily Revenue Calendar
 
@@ -319,7 +376,7 @@ YoY tells you if performance is actually declining relative to the same period l
 ## Cancellation Rate Trend
 
 <Alert status="warning">
-<b>~10% of order lines are cancelled</b> on average — this is lost revenue before it even ships. 
+<b>Approximately 1 in 10 order lines are cancelled</b> on average — this is lost revenue before it even ships. 
 Cancellation rate is a leading indicator of inventory availability, pricing errors, or checkout friction.
 </Alert>
 

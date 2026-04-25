@@ -839,3 +839,237 @@ models:
       - name: metric_value
         description: Computed answer value for the MCQ.
         tests: [not_null]
+
+  - name: mart_rfm_segments
+    description: |
+      Customer RFM segmentation with combined R-F-M scores and business segments.
+      Grain: customer_id.
+      R_score (1-5): recency — 1 = least recent, 5 = most recent.
+      F_score (1-5): frequency — 1 = lowest orders, 5 = highest orders.
+      M_score (1-5): monetary — 1 = lowest revenue, 5 = highest revenue.
+    columns:
+      - name: customer_id
+        description: Unique customer.
+        tests: [not_null, unique]
+      - name: r_score
+        description: Recency quintile (1-5).
+        tests: [not_null]
+      - name: f_score
+        description: Frequency quintile (1-5).
+        tests: [not_null]
+      - name: m_score
+        description: Monetary quintile (1-5).
+        tests: [not_null]
+      - name: rfm_segment
+        description: Combined segment — Champions, Loyal, New Customers, Potential Loyalist, Promising, At Risk, Cannot Lose Them, Hibernating, Others.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Champions', 'Loyal', 'New Customers', 'Potential Loyalist', 'Promising', 'At Risk', 'Cannot Lose Them', 'Hibernating', 'Need Attention', 'Others']
+
+  - name: mart_daily_shipment_coverage
+    description: |
+      Data-quality audit of shipment coverage by order status and date.
+      Highlights orders (especially non-cancelled) that lack shipment records.
+      Grain: (sales_date, order_status).
+    columns:
+      - name: sales_date
+        description: Order date.
+        tests: [not_null]
+      - name: order_status
+        description: Order lifecycle status.
+        tests: [not_null]
+      - name: total_orders
+        description: Count of orders on this date with this status.
+        tests: [not_null]
+      - name: orders_with_shipment
+        description: Count that have a matching shipment record.
+      - name: orders_without_shipment
+        description: Count that do NOT have a matching shipment record.
+      - name: shipment_coverage_rate
+        description: orders_with_shipment / total_orders.
+
+  - name: mart_product_reviews_summary
+    description: |
+      Product-level review aggregation joined with lifetime performance.
+      Enables correlation of ratings with return rates and margins.
+      Grain: product_id.
+    columns:
+      - name: product_id
+        description: Unique product.
+        tests: [not_null, unique]
+      - name: review_count
+        description: Total reviews received.
+      - name: avg_rating
+        description: Average star rating (1-5).
+      - name: low_rating_count
+        description: Reviews with rating <= 2.
+      - name: low_rating_rate
+        description: Share of reviews that are low ratings.
+
+  - name: mart_monthly_reviews_trend
+    description: |
+      Monthly review volume and average rating by category.
+      Grain: (month_start_date, category).
+    columns:
+      - name: month_start_date
+        description: First day of month.
+        tests: [not_null]
+      - name: category
+        description: Product category.
+        tests: [not_null]
+      - name: review_count
+        description: Total reviews in month for category.
+      - name: avg_rating
+        description: Average star rating.
+      - name: low_rating_rate
+        description: Share of low ratings (<=2 stars).
+
+  - name: mart_region_fulfillment_profile
+    description: |
+      Regional commercial and fulfillment performance summary.
+      Grain: region.
+    columns:
+      - name: region
+        description: Geographic region.
+        tests: [not_null, unique]
+      - name: total_orders
+        description: Distinct orders in region.
+      - name: total_customers
+        description: Distinct customers in region.
+      - name: total_revenue
+        description: Net revenue in region.
+      - name: gross_margin_rate
+        description: Gross profit / total_revenue.
+      - name: avg_days_to_deliver
+        description: Average end-to-end delivery days.
+      - name: avg_shipping_fee
+        description: Average shipping fee in VND.
+      - name: free_shipping_share
+        description: Share of shipped orders with free shipping.
+      - name: return_unit_rate
+        description: Returned units / units sold.
+
+  - name: mart_daily_conversion_breakdown
+    description: |
+      Daily order metrics broken down by device_type, payment_method, and order_source.
+      Conversion rates are approximated using total daily sessions as denominator
+      because web traffic is not segmented by device or source.
+      Grain: (sales_date, breakdown_type, breakdown_value).
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null]
+      - name: breakdown_type
+        description: Dimension name — device_type, payment_method, or order_source.
+        tests: [not_null]
+      - name: breakdown_value
+        description: Dimension value.
+        tests: [not_null]
+      - name: order_count
+        description: Distinct orders.
+      - name: revenue
+        description: Net revenue.
+      - name: avg_order_value
+        description: Revenue / order_count.
+      - name: cancellation_rate
+        description: Cancelled lines / total lines.
+      - name: approx_conversion_rate
+        description: order_count / total_sessions (directional only).
+
+  - name: mart_daily_payment_checkout_kpis
+    description: |
+      Daily payment mix, installment impact, and checkout friction signals.
+      Grain: (sales_date, payment_method).
+    columns:
+      - name: sales_date
+        description: Calendar date.
+        tests: [not_null]
+      - name: payment_method
+        description: Payment instrument.
+        tests: [not_null]
+      - name: order_count
+        description: Distinct orders.
+      - name: revenue
+        description: Net revenue.
+      - name: avg_order_value
+        description: Revenue / order_count.
+      - name: cancellation_rate
+        description: Cancelled lines / total lines.
+      - name: avg_payment_value
+        description: Average payment_value from payments table.
+      - name: installment_share
+        description: Share of orders with installments > 1.
+
+  - name: mart_seasonal_pattern
+    description: |
+      Seasonal revenue index by calendar month across all years.
+      Used for predictive seasonal decomposition and holiday planning.
+      Grain: month (1-12).
+    columns:
+      - name: month
+        description: Calendar month (1-12).
+        tests: [not_null, unique]
+      - name: avg_revenue
+        description: Average monthly revenue for this month across all years.
+      - name: seasonal_index
+        description: avg_revenue / overall_avg_revenue (>1 = above average).
+      - name: revenue_deviation
+        description: avg_revenue - overall_avg_revenue.
+
+  - name: mart_promo_cannibalization
+    description: |
+      Pre / during / post campaign revenue comparison to test demand pull-forward.
+      Compares avg daily revenue in -14..-1 (pre), campaign period (during), and +1..+14 (post).
+      Grain: (promo_id, period_type).
+    columns:
+      - name: promo_id
+        description: Unique promotion.
+        tests: [not_null]
+      - name: period_type
+        description: pre, during, or post.
+        tests: [not_null]
+      - name: avg_daily_revenue
+        description: Average daily revenue in the period window.
+      - name: avg_daily_orders
+        description: Average daily orders in the period window.
+      - name: days_in_period
+        description: Number of days included in the average.
+
+  - name: mart_region_category_revenue
+    description: |
+      Regional category revenue matrix for geographic demand pattern analysis.
+      Grain: (region, category).
+    columns:
+      - name: region
+        description: Geographic region.
+        tests: [not_null]
+      - name: category
+        description: Product category.
+        tests: [not_null]
+      - name: orders
+        description: Distinct orders in region × category.
+      - name: revenue
+        description: Net revenue in region × category.
+      - name: units_sold
+        description: Units sold in region × category.
+
+  - name: mart_top_cities
+    description: |
+      Top 20 cities by revenue and customer count.
+      Grain: (city, region).
+    columns:
+      - name: city
+        description: City name.
+        tests: [not_null]
+      - name: region
+        description: Geographic region.
+        tests: [not_null]
+      - name: orders
+        description: Distinct orders from city.
+      - name: customers
+        description: Distinct customers from city.
+      - name: revenue
+        description: Net revenue from city.
+
