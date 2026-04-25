@@ -74,6 +74,19 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     df["lag_7d_cogs"] = pd.Series(cogs).shift(7)
     df["lag_28d_cogs"] = pd.Series(cogs).shift(28)
     df["lag_365d_cogs"] = pd.Series(cogs).shift(365)
+    df["revenue_baseline"] = df["lag_365d_revenue"]
+    df["cogs_baseline"] = df["lag_365d_cogs"]
+    df["revenue_residual"] = df["revenue"] - df["revenue_baseline"]
+    df["cogs_residual"] = df["cogs"] - df["cogs_baseline"]
+
+    df["lag_1d_rev_residual"] = df["revenue_residual"].shift(1)
+    df["lag_2d_rev_residual"] = df["revenue_residual"].shift(2)
+    df["lag_3d_rev_residual"] = df["revenue_residual"].shift(3)
+    df["lag_7d_rev_residual"] = df["revenue_residual"].shift(7)
+    df["lag_1d_cogs_residual"] = df["cogs_residual"].shift(1)
+    df["lag_2d_cogs_residual"] = df["cogs_residual"].shift(2)
+    df["lag_3d_cogs_residual"] = df["cogs_residual"].shift(3)
+    df["lag_7d_cogs_residual"] = df["cogs_residual"].shift(7)
     df["lag_1d_rev_wow_growth"] = (
         df["lag_1d_revenue"] / df["lag_8d_revenue"].replace(0, np.nan) - 1
     ).fillna(0.0)
@@ -98,10 +111,6 @@ def _make_synthetic_df(n: int = 30, seed: int = 42) -> pd.DataFrame:
     df["roll_mean_28d_cogs"] = df["lag_1d_cogs"].rolling(window=28, min_periods=1).mean()
     df["ema_7d_revenue"] = df["lag_1d_revenue"].ewm(span=7, min_periods=1).mean()
     df["ema_28d_revenue"] = df["lag_1d_revenue"].ewm(span=28, min_periods=1).mean()
-    df["revenue_baseline"] = df["lag_365d_revenue"]
-    df["cogs_baseline"] = df["lag_365d_cogs"]
-    df["revenue_residual"] = df["revenue"] - df["revenue_baseline"]
-    df["cogs_residual"] = df["cogs"] - df["cogs_baseline"]
     return df
 
 

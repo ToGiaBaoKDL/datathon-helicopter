@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import numpy as np
 import optuna
-import pandas as pd
-import pytest
 
 from datathon.modeling.tuner import (
     _inject_fixed_params,

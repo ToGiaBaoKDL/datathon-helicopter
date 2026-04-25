@@ -14,6 +14,7 @@ from datathon.modeling.cv import ExpandingWindowCV
 from datathon.modeling.factory import build_forecaster
 from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.trainer import Trainer
+from datathon.tracking import MlflowTracker
 from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_forecast_base, load_modeling_data
@@ -163,24 +164,43 @@ def run(options: TrainOptions) -> None:
         residual_target=residual_target,
     )
 
-    if options.mode == "evaluate":
-        model_results = trainer.run_cv(df)
-        base_df = load_forecast_base(options.warehouse)
-        naive_results = _evaluate_baseline_on_splits(base_df, options.n_folds, options.horizon_days)
-        _print_comparison(model_results, naive_results, options.model_type)
-    else:
-        model_results = None
+    tracker = MlflowTracker(run_name=f"train_{options.model_type}_{options.mode}")
+    with tracker:
+        if tracker.enabled:
+            tracker.log_param("model_type", options.model_type)
+            tracker.log_param("mode", options.mode)
+            tracker.log_param("n_folds", options.n_folds)
+            tracker.log_param("horizon_days", options.horizon_days)
+            tracker.log_config(config)
 
-    if options.mode == "train-final":
-        console.print("\nTraining final models on full history …")
-        forecaster, feature_cols = trainer.train_final(df)
-        Trainer.save_artifacts(
-            model_dir=options.model_dir,
-            forecaster=forecaster,
-            feature_cols=feature_cols,
-            model_type=options.model_type,
-            cv_results=model_results,
-            cogs_column=cogs_column,
-            residual_target=residual_target,
-        )
-        console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")
+        if options.mode == "evaluate":
+            model_results = trainer.run_cv(df, tracker=tracker)
+            base_df = load_forecast_base(options.warehouse)
+            naive_results = _evaluate_baseline_on_splits(
+                base_df, options.n_folds, options.horizon_days
+            )
+            _print_comparison(model_results, naive_results, options.model_type)
+
+            if tracker.enabled:
+                tracker.set_tag("status", "evaluated")
+        else:
+            model_results = None
+
+        if options.mode == "train-final":
+            console.print("\nTraining final models on full history …")
+            forecaster, feature_cols = trainer.train_final(df)
+            Trainer.save_artifacts(
+                model_dir=options.model_dir,
+                forecaster=forecaster,
+                feature_cols=feature_cols,
+                model_type=options.model_type,
+                cv_results=model_results,
+                cogs_column=cogs_column,
+                residual_target=residual_target,
+            )
+            console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")
+
+            if tracker.enabled:
+                tracker.log_model(options.model_dir, artifact_path="model")
+                tracker.log_artifact(options.model_dir / "meta.json")
+                tracker.set_tag("status", "trained_final")

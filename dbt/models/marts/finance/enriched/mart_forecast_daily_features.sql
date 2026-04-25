@@ -218,6 +218,21 @@ lagged as (
     from base_with_lags
 ),
 
+with_residual_lags as (
+    select
+        *,
+        -- Lagged residuals (strong autocorrelation signals)
+        lag(revenue_residual, 1) over (order by sales_date) as lag_1d_rev_residual,
+        lag(revenue_residual, 2) over (order by sales_date) as lag_2d_rev_residual,
+        lag(revenue_residual, 3) over (order by sales_date) as lag_3d_rev_residual,
+        lag(revenue_residual, 7) over (order by sales_date) as lag_7d_rev_residual,
+        lag(cogs_residual, 1) over (order by sales_date) as lag_1d_cogs_residual,
+        lag(cogs_residual, 2) over (order by sales_date) as lag_2d_cogs_residual,
+        lag(cogs_residual, 3) over (order by sales_date) as lag_3d_cogs_residual,
+        lag(cogs_residual, 7) over (order by sales_date) as lag_7d_cogs_residual
+    from lagged
+),
+
 enriched as (
     select
         *,
@@ -228,7 +243,7 @@ enriched as (
             as rev_mom_acceleration,
         lag_1d_rev_yoy_growth - lag(lag_1d_rev_yoy_growth, 1) over (order by sales_date)
             as rev_yoy_acceleration
-    from lagged
+    from with_residual_lags
 )
 
 select *

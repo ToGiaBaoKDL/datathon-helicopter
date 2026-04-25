@@ -1,0 +1,13 @@
+# MLflow tracking configuration.
+# When tracking_uri is null, MLflow is disabled (no-op).
+tracking_uri: null
+experiment_name: datathon_forecasting
+
+# What to log
+log_models: true
+log_artifacts: true
+log_cv_predictions: false
+
+# Nested run settings
+log_optuna_trials: true
+log_per_fold_metrics: true

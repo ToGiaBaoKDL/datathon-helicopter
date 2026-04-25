@@ -33,7 +33,11 @@ class Trainer:
         self.revenue_column = "revenue_residual" if residual_target else "revenue"
 
     def run_cv(
-        self, df: pd.DataFrame, *, return_predictions: bool = False
+        self,
+        df: pd.DataFrame,
+        *,
+        return_predictions: bool = False,
+        tracker=None,
     ) -> dict[str, list[dict[str, float]]] | tuple[dict, list[pd.DataFrame]]:
         """Run expanding-window CV and return per-fold metrics.
 
@@ -43,6 +47,8 @@ class Trainer:
             When ``True``, also return a list of prediction DataFrames
             (one per fold) with columns ``date``, ``revenue_pred``,
             ``cogs_pred``.
+        tracker:
+            Optional ``MlflowTracker`` for logging per-fold metrics.
         """
         df = df.copy().sort_values("sales_date").reset_index(drop=True)
         cols = feature_columns(df)
@@ -74,6 +80,7 @@ class Trainer:
             actual = actual.rename(columns={"sales_date": "date"})
             merged = actual.merge(pred, on="date", suffixes=("_actual", "_pred"))
 
+            fold_metrics: dict[str, float] = {}
             for target in ("revenue", "cogs"):
                 y_true = merged[f"{target}_actual"].to_numpy()
                 y_pred = merged[f"{target}_pred"].to_numpy()
@@ -83,6 +90,19 @@ class Trainer:
                 r2 = float(r2_score(y_true, y_pred)) if np.var(y_true) > 0 else 0.0
 
                 results[target].append({"fold": fold + 1, "mae": mae, "rmse": rmse, "r2": r2})
+                fold_metrics[target] = mae
+
+                if tracker is not None:
+                    tracker.log_metric(f"cv_{target}_mae", mae, step=fold)
+                    tracker.log_metric(f"cv_{target}_rmse", rmse, step=fold)
+                    tracker.log_metric(f"cv_{target}_r2", r2, step=fold)
+
+            if tracker is not None:
+                tracker.log_metric(
+                    "cv_fold_total_mae",
+                    fold_metrics["revenue"] + fold_metrics["cogs"],
+                    step=fold,
+                )
 
             if return_predictions:
                 fold_preds.append(merged[["date", "revenue_pred", "cogs_pred"]].copy())

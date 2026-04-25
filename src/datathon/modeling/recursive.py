@@ -64,6 +64,14 @@ _TARGET_DERIVED = [
     "lag_7d_cogs",
     "lag_28d_cogs",
     "lag_365d_cogs",
+    "lag_1d_rev_residual",
+    "lag_2d_rev_residual",
+    "lag_3d_rev_residual",
+    "lag_7d_rev_residual",
+    "lag_1d_cogs_residual",
+    "lag_2d_cogs_residual",
+    "lag_3d_cogs_residual",
+    "lag_7d_cogs_residual",
     "roll_mean_7d_revenue",
     "roll_mean_28d_revenue",
     "roll_mean_365d_revenue",
@@ -132,69 +140,97 @@ def _update_row_features(combined: pd.DataFrame, idx: int) -> None:
     combined.at[idx, "lag_28d_cogs"] = cogs.iloc[idx - 28] if idx >= 28 else np.nan
     combined.at[idx, "lag_365d_cogs"] = cogs.iloc[idx - 365] if idx >= 365 else np.nan
 
+    # Lagged residuals (revenue_residual / cogs_residual from previous days)
+    if "lag_1d_rev_residual" in combined.columns:
+        combined.at[idx, "lag_1d_rev_residual"] = (
+            combined["revenue_residual"].iloc[idx - 1] if idx >= 1 else np.nan
+        )
+    if "lag_2d_rev_residual" in combined.columns:
+        combined.at[idx, "lag_2d_rev_residual"] = (
+            combined["revenue_residual"].iloc[idx - 2] if idx >= 2 else np.nan
+        )
+    if "lag_3d_rev_residual" in combined.columns:
+        combined.at[idx, "lag_3d_rev_residual"] = (
+            combined["revenue_residual"].iloc[idx - 3] if idx >= 3 else np.nan
+        )
+    if "lag_7d_rev_residual" in combined.columns:
+        combined.at[idx, "lag_7d_rev_residual"] = (
+            combined["revenue_residual"].iloc[idx - 7] if idx >= 7 else np.nan
+        )
+    if "lag_1d_cogs_residual" in combined.columns:
+        combined.at[idx, "lag_1d_cogs_residual"] = (
+            combined["cogs_residual"].iloc[idx - 1] if idx >= 1 else np.nan
+        )
+    if "lag_2d_cogs_residual" in combined.columns:
+        combined.at[idx, "lag_2d_cogs_residual"] = (
+            combined["cogs_residual"].iloc[idx - 2] if idx >= 2 else np.nan
+        )
+    if "lag_3d_cogs_residual" in combined.columns:
+        combined.at[idx, "lag_3d_cogs_residual"] = (
+            combined["cogs_residual"].iloc[idx - 3] if idx >= 3 else np.nan
+        )
+    if "lag_7d_cogs_residual" in combined.columns:
+        combined.at[idx, "lag_7d_cogs_residual"] = (
+            combined["cogs_residual"].iloc[idx - 7] if idx >= 7 else np.nan
+        )
+
     # Growth ratios
     lag_1d = combined.at[idx, "lag_1d_revenue"]
     lag_8d = combined.at[idx, "lag_8d_revenue"]
     lag_29d = combined.at[idx, "lag_29d_revenue"]
     lag_365d = combined.at[idx, "lag_365d_revenue"]
 
-    wow = (lag_1d / lag_8d - 1) if pd.notna(lag_8d) and lag_8d != 0 else 0.0
-    mom = (lag_1d / lag_29d - 1) if pd.notna(lag_29d) and lag_29d != 0 else 0.0
-    yoy = (lag_1d / lag_365d - 1) if pd.notna(lag_365d) and lag_365d != 0 else 0.0
+    wow = (lag_1d / lag_8d - 1) if pd.notna(lag_8d) and lag_8d != 0 else np.nan
+    mom = (lag_1d / lag_29d - 1) if pd.notna(lag_29d) and lag_29d != 0 else np.nan
+    yoy = (lag_1d / lag_365d - 1) if pd.notna(lag_365d) and lag_365d != 0 else np.nan
 
     combined.at[idx, "lag_1d_rev_wow_growth"] = wow
     combined.at[idx, "lag_1d_rev_mom_growth"] = mom
     combined.at[idx, "lag_1d_rev_yoy_growth"] = yoy
 
     # Acceleration: change in growth rate from previous day
-    prev_wow = combined.at[idx - 1, "lag_1d_rev_wow_growth"] if idx >= 1 else 0.0
-    prev_mom = combined.at[idx - 1, "lag_1d_rev_mom_growth"] if idx >= 1 else 0.0
-    prev_yoy = combined.at[idx - 1, "lag_1d_rev_yoy_growth"] if idx >= 1 else 0.0
+    prev_wow = combined.at[idx - 1, "lag_1d_rev_wow_growth"] if idx >= 1 else np.nan
+    prev_mom = combined.at[idx - 1, "lag_1d_rev_mom_growth"] if idx >= 1 else np.nan
+    prev_yoy = combined.at[idx - 1, "lag_1d_rev_yoy_growth"] if idx >= 1 else np.nan
     combined.at[idx, "rev_wow_acceleration"] = wow - prev_wow
     combined.at[idx, "rev_mom_acceleration"] = mom - prev_mom
     combined.at[idx, "rev_yoy_acceleration"] = yoy - prev_yoy
 
     # Rolling statistics on lag_1d_revenue == revenue shifted by 1.
-    if idx >= 1:
-        win7 = rev.iloc[max(0, idx - 7) : idx].to_numpy()
-        win28 = rev.iloc[max(0, idx - 28) : idx].to_numpy()
-        win365 = rev.iloc[max(0, idx - 365) : idx].to_numpy()
+    win7 = rev.iloc[max(0, idx - 7) : idx].to_numpy()
+    win28 = rev.iloc[max(0, idx - 28) : idx].to_numpy()
+    win365 = rev.iloc[max(0, idx - 365) : idx].to_numpy()
 
-        combined.at[idx, "roll_mean_7d_revenue"] = float(np.mean(win7))
-        combined.at[idx, "roll_mean_28d_revenue"] = float(np.mean(win28))
-        combined.at[idx, "roll_mean_365d_revenue"] = float(np.mean(win365))
+    combined.at[idx, "roll_mean_7d_revenue"] = float(np.nanmean(win7)) if len(win7) else np.nan
+    combined.at[idx, "roll_mean_28d_revenue"] = float(np.nanmean(win28)) if len(win28) else np.nan
+    combined.at[idx, "roll_mean_365d_revenue"] = (
+        float(np.nanmean(win365)) if len(win365) else np.nan
+    )
 
-        combined.at[idx, "roll_median_7d_revenue"] = float(np.median(win7))
-        combined.at[idx, "roll_median_28d_revenue"] = float(np.median(win28))
+    combined.at[idx, "roll_median_7d_revenue"] = float(np.nanmedian(win7)) if len(win7) else np.nan
+    combined.at[idx, "roll_median_28d_revenue"] = (
+        float(np.nanmedian(win28)) if len(win28) else np.nan
+    )
 
-        combined.at[idx, "roll_std_7d_revenue"] = (
-            float(np.std(win7, ddof=1)) if len(win7) >= 2 else 0.0
-        )
-        combined.at[idx, "roll_std_28d_revenue"] = (
-            float(np.std(win28, ddof=1)) if len(win28) >= 2 else 0.0
-        )
-        combined.at[idx, "roll_std_365d_revenue"] = (
-            float(np.std(win365, ddof=1)) if len(win365) >= 2 else 0.0
-        )
-    else:
-        combined.at[idx, "roll_mean_7d_revenue"] = 0.0
-        combined.at[idx, "roll_mean_28d_revenue"] = 0.0
-        combined.at[idx, "roll_mean_365d_revenue"] = 0.0
-        combined.at[idx, "roll_median_7d_revenue"] = 0.0
-        combined.at[idx, "roll_median_28d_revenue"] = 0.0
-        combined.at[idx, "roll_std_7d_revenue"] = 0.0
-        combined.at[idx, "roll_std_28d_revenue"] = 0.0
-        combined.at[idx, "roll_std_365d_revenue"] = 0.0
+    combined.at[idx, "roll_std_7d_revenue"] = (
+        float(np.nanstd(win7, ddof=1)) if len(win7) >= 2 else np.nan
+    )
+    combined.at[idx, "roll_std_28d_revenue"] = (
+        float(np.nanstd(win28, ddof=1)) if len(win28) >= 2 else np.nan
+    )
+    combined.at[idx, "roll_std_365d_revenue"] = (
+        float(np.nanstd(win365, ddof=1)) if len(win365) >= 2 else np.nan
+    )
 
     # COGS rolling means
-    if idx >= 1:
-        cogs_win7 = cogs.iloc[max(0, idx - 7) : idx].to_numpy()
-        cogs_win28 = cogs.iloc[max(0, idx - 28) : idx].to_numpy()
-        combined.at[idx, "roll_mean_7d_cogs"] = float(np.mean(cogs_win7))
-        combined.at[idx, "roll_mean_28d_cogs"] = float(np.mean(cogs_win28))
-    else:
-        combined.at[idx, "roll_mean_7d_cogs"] = 0.0
-        combined.at[idx, "roll_mean_28d_cogs"] = 0.0
+    cogs_win7 = cogs.iloc[max(0, idx - 7) : idx].to_numpy()
+    cogs_win28 = cogs.iloc[max(0, idx - 28) : idx].to_numpy()
+    combined.at[idx, "roll_mean_7d_cogs"] = (
+        float(np.nanmean(cogs_win7)) if len(cogs_win7) else np.nan
+    )
+    combined.at[idx, "roll_mean_28d_cogs"] = (
+        float(np.nanmean(cogs_win28)) if len(cogs_win28) else np.nan
+    )
 
     # Baseline / residual (lag_365d is the naive YoY forecast)
     if "revenue_baseline" in combined.columns:
@@ -346,27 +382,36 @@ def recursive_forecast(
             rev_baseline = combined.at[idx, "revenue_baseline"]
             rev_baseline = float(rev_baseline) if pd.notna(rev_baseline) else 0.0
             rev_val = max(0.0, rev_baseline + float(pred_rev[0]))
-            combined.at[idx, "revenue"] = rev_val
 
             if cogs_is_ratio:
                 ratio_val = max(0.0, min(2.0, float(pred_cogs[0])))
-                combined.at[idx, "cogs_ratio"] = ratio_val
-                combined.at[idx, "cogs"] = rev_val * ratio_val
+                cogs_val = rev_val * ratio_val
             else:
                 cogs_baseline = combined.at[idx, "cogs_baseline"]
                 cogs_baseline = float(cogs_baseline) if pd.notna(cogs_baseline) else 0.0
                 cogs_val = max(0.0, cogs_baseline + float(pred_cogs[0]))
-                combined.at[idx, "cogs"] = cogs_val
         else:
             rev_val = max(0.0, float(pred_rev[0]))
-            combined.at[idx, "revenue"] = rev_val
 
             if cogs_is_ratio:
                 ratio_val = max(0.0, min(2.0, float(pred_cogs[0])))
-                combined.at[idx, "cogs_ratio"] = ratio_val
-                combined.at[idx, "cogs"] = rev_val * ratio_val
+                cogs_val = rev_val * ratio_val
             else:
-                combined.at[idx, "cogs"] = max(0.0, float(pred_cogs[0]))
+                cogs_val = max(0.0, float(pred_cogs[0]))
+
+        combined.at[idx, "revenue"] = rev_val
+        combined.at[idx, "cogs"] = cogs_val
+
+        # Keep residual columns in sync so lagged residual features work
+        # correctly during recursive steps.
+        if "revenue_baseline" in combined.columns:
+            base = combined.at[idx, "revenue_baseline"]
+            base = float(base) if pd.notna(base) else 0.0
+            combined.at[idx, "revenue_residual"] = rev_val - base
+        if "cogs_baseline" in combined.columns and not cogs_is_ratio:
+            base = combined.at[idx, "cogs_baseline"]
+            base = float(base) if pd.notna(base) else 0.0
+            combined.at[idx, "cogs_residual"] = cogs_val - base
 
     predictions = combined.iloc[history_len:][["sales_date", "revenue", "cogs"]].copy()
     predictions = predictions.rename(columns={"sales_date": "date"})

@@ -18,6 +18,7 @@ from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.forecasters.ensemble import EnsembleForecaster
 from datathon.modeling.recursive import recursive_forecast
 from datathon.modeling.trainer import Trainer
+from datathon.tracking import MlflowTracker
 from datathon.utils.competition import submission_columns
 from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
@@ -228,33 +229,60 @@ def run(options: CompareOptions) -> None:
     )
     _print_summary(all_results, winner)
 
-    console.print("\nTraining final models on full history …")
-    available = list_forecasters()
-    for model_type in available:
-        model_dir = options.model_dir / model_type
-        if model_dir.exists() and not options.force:
-            console.print(f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]")
-            continue
-        forecaster = build_forecaster(model_type, config)
-        trainer = Trainer(
-            forecaster=forecaster,
-            cv=ExpandingWindowCV(),
-            cogs_column=cogs_column,
-            residual_target=residual_target,
-        )
-        forecaster_fitted, feature_cols = trainer.train_final(df)
-        Trainer.save_artifacts(
-            model_dir=model_dir,
-            forecaster=forecaster_fitted,
-            feature_cols=feature_cols,
-            model_type=model_type,
-            cv_results=all_results.get(model_type),
-            cogs_column=cogs_column,
-            residual_target=residual_target,
-        )
-        console.print(f"  [green]{model_type}[/green] saved to {model_dir}")
+    tracker = MlflowTracker(run_name="compare_models")
+    with tracker:
+        if tracker.enabled:
+            tracker.log_param("n_folds", options.n_folds)
+            tracker.log_param("horizon_days", options.horizon_days)
+            tracker.log_config(config)
 
-    # Generate submission from the true winner
+        console.print("\nTraining final models on full history …")
+        available = list_forecasters()
+        for model_type in available:
+            model_dir = options.model_dir / model_type
+            if model_dir.exists() and not options.force:
+                console.print(
+                    f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]"
+                )
+                continue
+            forecaster = build_forecaster(model_type, config)
+            trainer = Trainer(
+                forecaster=forecaster,
+                cv=ExpandingWindowCV(),
+                cogs_column=cogs_column,
+                residual_target=residual_target,
+            )
+            forecaster_fitted, feature_cols = trainer.train_final(df)
+            Trainer.save_artifacts(
+                model_dir=model_dir,
+                forecaster=forecaster_fitted,
+                feature_cols=feature_cols,
+                model_type=model_type,
+                cv_results=all_results.get(model_type),
+                cogs_column=cogs_column,
+                residual_target=residual_target,
+            )
+            console.print(f"  [green]{model_type}[/green] saved to {model_dir}")
+
+            if tracker.enabled:
+                tracker.log_model(model_dir, artifact_path=f"models/{model_type}")
+
+        if tracker.enabled:
+            for model_type, results in all_results.items():
+                avg_rev = sum(r["mae"] for r in results["revenue"]) / len(results["revenue"])
+                avg_cogs = sum(r["mae"] for r in results["cogs"]) / len(results["cogs"])
+                tracker.log_metric(f"{model_type}_rev_mae", avg_rev)
+                tracker.log_metric(f"{model_type}_cogs_mae", avg_cogs)
+                tracker.log_metric(f"{model_type}_total_mae", avg_rev + avg_cogs)
+            tracker.log_param("winner", winner)
+            tracker.log_dict(
+                {m: float(w) for m, w in zip(available, ensemble_weights, strict=True)},
+                "ensemble_weights.json",
+            )
+            tracker.set_tag("winner", winner)
+            tracker.set_tag("status", "compared")
+
+        # Generate submission from the true winner
     if winner == "ensemble":
         console.print(
             f"\n[bold]Ensemble won CV — generating weighted ensemble submission "
@@ -306,3 +334,7 @@ def run(options: CompareOptions) -> None:
     options.output_path.parent.mkdir(parents=True, exist_ok=True)
     submission.to_csv(options.output_path, index=False)
     console.print(f"Submission written to [bold]{options.output_path}[/bold]")
+
+    if tracker.enabled:
+        tracker.log_artifact(options.output_path)
+        tracker.set_tag("status", "submitted")

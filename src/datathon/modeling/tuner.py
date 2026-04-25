@@ -12,6 +12,7 @@ import pandas as pd
 from datathon.modeling.cv import ExpandingWindowCV
 from datathon.modeling.factory import build_forecaster
 from datathon.modeling.recursive import feature_columns, recursive_forecast
+from datathon.tracking import MlflowTracker, OptunaMLflowCallback
 from datathon.utils.config import load_modeling_config, resolve_targets
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -212,7 +213,8 @@ def run_study(
     study_name:
         Name for the Optuna study (defaults to ``datathon_<model_type>``).
     storage:
-        Optuna storage URL (``None`` = in-memory).
+        Optuna storage URL (``None`` = in-memory).  This is *separate* from
+        MLflow tracking; Optuna SQLite DBs are still stored locally.
     seed:
         Random seed for reproducibility.
     patience:
@@ -229,45 +231,68 @@ def run_study(
     config = load_modeling_config(config_path)
     revenue_column, cogs_column, residual_target = resolve_targets(config)
 
-    study_name = study_name or f"datathon_{model_type}"
-    study = optuna.create_study(
-        study_name=study_name,
-        storage=storage,
-        direction="minimize",
-        sampler=optuna.samplers.TPESampler(seed=seed),
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1),
-        load_if_exists=True,
-    )
+    tracker = MlflowTracker(run_name=f"tune_{model_type}")
+    with tracker:
+        if tracker.enabled:
+            tracker.log_param("model_type", model_type)
+            tracker.log_param("n_trials", n_trials)
+            tracker.log_param("n_folds", n_folds)
+            tracker.log_param("horizon_days", horizon_days)
+            tracker.log_param("seed", seed)
+            tracker.log_config(config)
 
-    objective = _make_objective(
-        df, model_type, config, cogs_column, residual_target, n_folds, horizon_days
-    )
-    stop_callback = _make_stop_callback(patience=patience)
-    study.optimize(
-        objective,
-        n_trials=n_trials,
-        timeout=timeout,
-        show_progress_bar=True,
-        callbacks=[stop_callback],
-    )
+        study_name = study_name or f"datathon_{model_type}"
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage,
+            direction="minimize",
+            sampler=optuna.samplers.TPESampler(seed=seed),
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1),
+            load_if_exists=True,
+        )
 
-    best_trial = study.best_trial
-    best_params = dict(best_trial.params)
-    best_value = float(best_trial.value)
+        objective = _make_objective(
+            df, model_type, config, cogs_column, residual_target, n_folds, horizon_days
+        )
+        stop_callback = _make_stop_callback(patience=patience)
+        callbacks: list = [stop_callback]
+        if tracker.enabled:
+            callbacks.append(OptunaMLflowCallback(tracker))
 
-    rev_iter = best_trial.user_attrs.get("best_iteration_rev")
-    cogs_iter = best_trial.user_attrs.get("best_iteration_cogs")
+        study.optimize(
+            objective,
+            n_trials=n_trials,
+            timeout=timeout,
+            show_progress_bar=True,
+            callbacks=callbacks,
+        )
 
-    # Use the more conservative (larger) ceiling so neither model is cut short.
-    best_iter = None
-    if rev_iter is not None:
-        best_iter = int(rev_iter)
-    if cogs_iter is not None:
-        best_iter = int(cogs_iter) if best_iter is None else max(best_iter, int(cogs_iter))
-    if best_iter is not None:
-        key = "iterations" if model_type == "catboost" else "n_estimators"
-        best_params[key] = best_iter
+        best_trial = study.best_trial
+        best_params = dict(best_trial.params)
+        best_value = float(best_trial.value)
 
-    # Merge fixed params so the returned config is self-contained.
-    best_params = _inject_fixed_params(best_params, config, model_type)
-    return best_params, best_value
+        rev_iter = best_trial.user_attrs.get("best_iteration_rev")
+        cogs_iter = best_trial.user_attrs.get("best_iteration_cogs")
+
+        # Use the more conservative (larger) ceiling so neither model is cut short.
+        best_iter = None
+        if rev_iter is not None:
+            best_iter = int(rev_iter)
+        if cogs_iter is not None:
+            best_iter = int(cogs_iter) if best_iter is None else max(best_iter, int(cogs_iter))
+        if best_iter is not None:
+            key = "iterations" if model_type == "catboost" else "n_estimators"
+            best_params[key] = best_iter
+
+        # Merge fixed params so the returned config is self-contained.
+        best_params = _inject_fixed_params(best_params, config, model_type)
+
+        if tracker.enabled:
+            tracker.log_metric("best_total_mae", best_value)
+            tracker.log_params({f"best_{k}": v for k, v in best_params.items()})
+            tracker.log_dict(best_params, "best_params.json")
+            tracker.set_tag("model_type", model_type)
+            tracker.set_tag("status", "tuned")
+            tracker.set_tag("optuna_study", study_name)
+
+        return best_params, best_value

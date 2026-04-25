@@ -9,6 +9,7 @@ from datathon.commands.common import CommandError, ensure_no_unknown_args, take_
 from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.recursive import recursive_forecast
 from datathon.modeling.trainer import Trainer
+from datathon.tracking import MlflowTracker
 from datathon.utils.competition import submission_columns
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_modeling_data, load_scaffold
@@ -104,3 +105,14 @@ def run(options: PredictOptions) -> None:
     options.output_path.parent.mkdir(parents=True, exist_ok=True)
     submission.to_csv(options.output_path, index=False)
     console.print(f"Submission written to [bold]{options.output_path}[/bold]")
+
+    tracker = MlflowTracker(run_name=f"predict_{options.model_type}")
+    with tracker:
+        if tracker.enabled:
+            tracker.log_param("model_type", model_type)
+            tracker.log_param("history_days", len(history))
+            tracker.log_param("forecast_days", len(scaffold))
+            tracker.log_param("cogs_target", cogs_column)
+            tracker.log_param("residual_target", residual_target)
+            tracker.log_artifact(options.output_path)
+            tracker.set_tag("status", "predicted")

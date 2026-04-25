@@ -5,9 +5,9 @@ import pandas as pd
 import pytest
 
 from datathon.modeling.recursive import (
-    CALENDAR_FEATURES,
     _META_COLUMNS,
     _TARGET_DERIVED,
+    CALENDAR_FEATURES,
     _prepare_future_frame,
     _update_row_features,
     feature_columns,
@@ -48,6 +48,8 @@ class TestUpdateRowFeatures:
         df["revenue_baseline"] = np.nan
         df["cogs_baseline"] = np.nan
         df["cogs_ratio"] = df["cogs"] / df["revenue"]
+        df["revenue_residual"] = np.nan
+        df["cogs_residual"] = np.nan
         return df
 
     def test_lags_populated_correctly(self) -> None:
@@ -68,14 +70,14 @@ class TestUpdateRowFeatures:
         assert pd.isna(df.at[idx, "lag_7d_revenue"])
         assert pd.isna(df.at[idx, "lag_365d_revenue"])
 
-    def test_growth_ratios_zero_when_no_history(self) -> None:
+    def test_growth_ratios_nan_when_no_history(self) -> None:
         df = self._make_history(400)
         idx = 0
         _update_row_features(df, idx)
 
-        assert df.at[idx, "lag_1d_rev_wow_growth"] == 0.0
-        assert df.at[idx, "lag_1d_rev_mom_growth"] == 0.0
-        assert df.at[idx, "lag_1d_rev_yoy_growth"] == 0.0
+        assert pd.isna(df.at[idx, "lag_1d_rev_wow_growth"])
+        assert pd.isna(df.at[idx, "lag_1d_rev_mom_growth"])
+        assert pd.isna(df.at[idx, "lag_1d_rev_yoy_growth"])
 
     def test_growth_ratios_computed(self) -> None:
         df = self._make_history(400)
@@ -99,13 +101,13 @@ class TestUpdateRowFeatures:
             float(np.std(win7, ddof=1)), abs=1e-6
         )
 
-    def test_rolling_stats_zero_at_start(self) -> None:
+    def test_rolling_stats_nan_at_start(self) -> None:
         df = self._make_history(400)
         idx = 0
         _update_row_features(df, idx)
 
-        assert df.at[idx, "roll_mean_7d_revenue"] == 0.0
-        assert df.at[idx, "roll_std_7d_revenue"] == 0.0
+        assert pd.isna(df.at[idx, "roll_mean_7d_revenue"])
+        assert pd.isna(df.at[idx, "roll_std_7d_revenue"])
 
     def test_baseline_updated(self) -> None:
         df = self._make_history(400)
@@ -131,6 +133,37 @@ class TestUpdateRowFeatures:
 
         wow_diff = df.at[11, "lag_1d_rev_wow_growth"] - df.at[10, "lag_1d_rev_wow_growth"]
         assert df.at[11, "rev_wow_acceleration"] == pytest.approx(wow_diff)
+
+    def test_lagged_residuals_populated(self) -> None:
+        df = self._make_history(400)
+        # Simulate previous recursive steps having updated residuals
+        df.at[363, "revenue_residual"] = 100.0
+        df.at[364, "revenue_residual"] = 110.0
+        df.at[365, "revenue_residual"] = 123.0
+        df.at[363, "cogs_residual"] = 40.0
+        df.at[364, "cogs_residual"] = 42.0
+        df.at[365, "cogs_residual"] = 45.0
+        idx = 366
+        _update_row_features(df, idx)
+
+        assert df.at[idx, "lag_1d_rev_residual"] == 123.0
+        assert df.at[idx, "lag_2d_rev_residual"] == 110.0
+        assert df.at[idx, "lag_3d_rev_residual"] == 100.0
+        assert df.at[idx, "lag_1d_cogs_residual"] == 45.0
+        assert df.at[idx, "lag_2d_cogs_residual"] == 42.0
+        assert df.at[idx, "lag_3d_cogs_residual"] == 40.0
+
+    def test_lagged_residuals_before_window_are_nan(self) -> None:
+        df = self._make_history(400)
+        idx = 0
+        _update_row_features(df, idx)
+
+        assert pd.isna(df.at[idx, "lag_1d_rev_residual"])
+        assert pd.isna(df.at[idx, "lag_2d_rev_residual"])
+        assert pd.isna(df.at[idx, "lag_3d_rev_residual"])
+        assert pd.isna(df.at[idx, "lag_1d_cogs_residual"])
+        assert pd.isna(df.at[idx, "lag_2d_cogs_residual"])
+        assert pd.isna(df.at[idx, "lag_3d_cogs_residual"])
 
 
 class TestPrepareFutureFrame:

@@ -425,6 +425,40 @@ models/lightgbm/
 - `pytest`: **10 passed**.
 - `ruff check src/ tests/`: All passed.
 
+### 29. MLflow Tracking Integration (New)
+**Goal:** Track experiments, models, metrics, and best configs centrally.
+
+**New files:**
+- `configs/tracking.yaml`: MLflow on/off switch, experiment name, artifact logging flags.
+- `src/datathon/tracking/tracker.py`: `MlflowTracker` wrapper — optional by design (no-op when `tracking_uri: null`).
+- `src/datathon/tracking/optuna_callback.py`: `OptunaMLflowCallback` — logs each trial as nested MLflow run.
+
+**Integration points:**
+- `tune`: Logs study params, per-trial nested runs (hyperparams + total_mae), best params artifact.
+- `train --mode evaluate`: Logs per-fold CV metrics (rev_mae, cogs_mae, r2) with fold number as step.
+- `train --mode train-final`: Logs trained model artifacts (forecaster.pkl, meta.json).
+- `compare-models`: Logs per-model CV scores, winner tag, ensemble weights JSON, all model artifacts.
+
+**Usage:**
+```bash
+# Disabled by default (tracking_uri: null)
+uv run datathon tune --model-type lightgbm
+
+# Enable with local file backend
+export MLFLOW_TRACKING_URI="file:./mlruns"
+uv run datathon tune --model-type lightgbm
+uv run mlflow ui --backend-store-uri file:./mlruns
+```
+
+**Key design:**
+- **Optional**: No MLflow server needed; pipeline runs unchanged if disabled.
+- **Config-driven**: `tracking_uri` from `configs/tracking.yaml` or env var `MLFLOW_TRACKING_URI`.
+- **Optuna sqlite stays local**: `optuna_studies/<model>.db` is unchanged; MLflow only stores metadata + artifacts in parallel.
+
+**Validation:**
+- `ruff check src/`: All passed.
+- `pytest` (core tests): 43 passed.
+
 ## Remaining Notes / Known Issues
 - Evidence pages still use `union all` unpivot patterns where needed; this is standard for Evidence component consumption and not duplicate business logic.
 - **Kaggle submission executed**: Ensemble (LightGBM + XGBoost) submitted successfully to datathon-2026-round-1.
@@ -433,28 +467,30 @@ models/lightgbm/
 - 181 days in 2012 have `sessions = 0` in `mart_forecast_daily_base` (missing early web_traffic data).
 - **Shipment data gaps**: ~80,878 orders (12.5%) lack records in `raw.shipments`. Of these, 59,462 are `cancelled` (expected), but 21,416 are non-cancelled — including 524 `delivered`, 29 `returned`, and 11 `shipped` orders with no shipment trail. This is a raw data referential-integrity gap, not a dbt bug. `mart_daily_fulfillment_kpis` correctly measures only orders with shipment records.
 
-### 29. ML Test Suite Expansion (New)
-**Goal:** Increase pytest coverage from 11 → 76 tests across all ML pipeline components.
+### 30. Recursive Logic Deep Review & Bug Fixes
 
-**New test files:**
-- **`tests/test_cv.py`** (8 tests): `ExpandingWindowCV` — folds, train growth, val fixed length, no overlap, single fold, not-enough-rows error, horizon > data, end clipping.
-- **`tests/test_recursive.py`** (16 tests): `_update_row_features` — lags, growth ratios, rolling stats, baseline/residual, cogs_ratio, acceleration. `_prepare_future_frame` — calendar features, leap year, Tet, exogenous ffill, NaN targets. `feature_columns` — meta exclusion.
-- **`tests/test_forecasters.py`** (7 tests): Registry (`FORECASTERS`, `get_forecaster`, `list_forecasters`), `build_forecaster`, predict-before-fit error, `best_iterations` default.
-- **`tests/test_config.py`** (6 tests): `load_modeling_config` base + overlay, `resolve_targets` for absolute/ratio/residual modes.
-- **`tests/test_tuner.py`** (9 tests): `_inject_fixed_params` merge logic, `_suggest_lightgbm/xgboost/catboost` key validation, `_make_stop_callback` early-stop behavior (patience, no-stop threshold, consecutive worse).
-- **`tests/test_explainer.py`** (5 tests): `explain_forecaster` with mocked SHAP — revenue/cogs keys, missing model attrs error, sample_size, plot saving. `_save_shap_plots` file creation.
-- **`tests/test_data_loaders.py`** (5 tests): Mocked DuckDB — `load_modeling_data` (date parse, empty raise, int→float cast), `load_forecast_base`, `load_scaffold`.
+**Critical bug fixed:**
+- **`src/datathon/modeling/recursive.py`**: `revenue_residual` / `cogs_residual` không bao giờ được cập nhật trong recursive loop → `lag_1d_rev_residual` bị NaN từ future row #2 trở đi. **Fixed** bằng cách sync `revenue_residual = rev_val - baseline` và `cogs_residual = cogs_val - baseline` sau mỗi predict step.
 
-**Updated `test_trainer.py`:**
-- Added **CatBoostForecaster** to all parametrized tests (`iterations=10` for speed).
-- Added `test_trainer_cv_returns_predictions_when_asked` — verifies `run_cv(..., return_predictions=True)` returns per-fold DataFrames with correct columns.
+**Inconsistency SQL ↔ Python fixed:**
+- Growth ratios (`lag_1d_rev_*_growth`): Python trả về `0.0` khi denom=0/NaN, SQL trả về `NULL`. **Fixed** Python → `np.nan`.
+- Rolling stats tại idx=0: SQL trả về `NULL`, Python trả về `0.0`. **Fixed** Python → `np.nan`.
+- Rolling std với < 2 rows: SQL `stddev_samp` → `NULL`, Python → `0.0`. **Fixed** Python → `np.nan`.
 
-**Bug found & fixed during testing:**
-- `src/datathon/modeling/factory.py`: `build_forecaster` silently used empty kwargs when `model_type` missing from config. **Fixed** to raise `ValueError` with available model types.
+**Feature additions:**
+- `lag_2d_rev_residual`, `lag_3d_rev_residual`, `lag_2d_cogs_residual`, `lag_3d_cogs_residual` — thêm vào SQL mart và `recursive.py`.
 
-**Validation:**
-- `pytest`: **76 passed** (full suite).
-- `ruff check src/ tests/`: All passed.
+### 31. Audit Package (`audit/`)
+
+Replaced ad-hoc `scripts/` with modular `audit/` package:
+- `data_quality.py` — schema, nulls, date gaps, row counts
+- `feature_analysis.py` — target stats, correlations, quick LightGBM importance, autocorrelations
+- `mart_validation.py` — validate SQL columns vs `recursive.py` expectations
+- `report.py` — Rich console report
+- Entry point: `uv run python -m audit`
+
+### 32. README Cleanup
+Rewrote `README.md` to be concise (reproduce, install, structure, commands) while moving session history detail to `AGENTS.md`.
 
 ## Quick Commands
 ```bash

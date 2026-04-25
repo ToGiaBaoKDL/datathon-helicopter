@@ -10,6 +10,7 @@ import yaml
 from datathon.utils.paths import project_root
 
 _DEFAULT_CONFIG_PATH = project_root() / "configs" / "modeling.yaml"
+_TRACKING_CONFIG_PATH = project_root() / "configs" / "tracking.yaml"
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -66,3 +67,10 @@ def resolve_targets(config: dict[str, Any]) -> tuple[str, str, bool]:
         )
 
     return revenue_column, cogs_column, residual_target
+
+
+def load_tracking_config() -> dict[str, Any]:
+    """Load tracking configuration (MLflow on/off, URI, experiment name)."""
+    if _TRACKING_CONFIG_PATH.exists():
+        return _load_yaml(_TRACKING_CONFIG_PATH)
+    return {}

@@ -27,7 +27,7 @@ def test_get_forecaster_unknown_raises() -> None:
 
 def test_forecasters_registry_is_dict() -> None:
     assert isinstance(FORECASTERS, dict)
-    for name, cls in FORECASTERS.items():
+    for _name, cls in FORECASTERS.items():
         assert issubclass(cls, BaseForecaster)
 
 
