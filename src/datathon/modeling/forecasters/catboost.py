@@ -18,8 +18,15 @@ class CatBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
         self._cb_kwargs = cb_kwargs
 
     def fit(self, X, y_rev, y_cogs, eval_set=None):
-        self.model_rev = cb.CatBoostRegressor(**self._cb_kwargs)
-        self.model_cogs = cb.CatBoostRegressor(**self._cb_kwargs)
+        rev_kwargs = dict(self._cb_kwargs)
+        cogs_kwargs = dict(self._cb_kwargs)
+        # Ensure reproducibility
+        if "random_seed" not in rev_kwargs and "random_state" not in rev_kwargs:
+            rev_kwargs["random_seed"] = 42
+        if "random_seed" not in cogs_kwargs and "random_state" not in cogs_kwargs:
+            cogs_kwargs["random_seed"] = 42
+        self.model_rev = cb.CatBoostRegressor(**rev_kwargs)
+        self.model_cogs = cb.CatBoostRegressor(**cogs_kwargs)
 
         fit_rev: dict = {}
         fit_cogs: dict = {}

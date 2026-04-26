@@ -1,6 +1,8 @@
 # MLflow tracking configuration.
 # When tracking_uri is null, MLflow is disabled (no-op).
-tracking_uri: null
+# SQLite backend avoids the deprecated filesystem backend warning.
+tracking_uri: sqlite:///mlflow/datathon.db
+artifact_uri: file:./mlflow/artifacts
 experiment_name: datathon_forecasting
 
 # What to log

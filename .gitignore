@@ -33,6 +33,10 @@ warehouse/*.wal
 # Optuna tuning studies
 optuna_studies/
 
+# MLflow tracking database
+mlflow/
+mlruns/
+
 # Environment
 .env
 

@@ -178,9 +178,11 @@ Pages: executive KPIs, risk flags, revenue drivers, fulfillment, inventory, mark
 Edit `configs/tracking.yaml` or set env var:
 
 ```bash
-export MLFLOW_TRACKING_URI=file:./mlruns
 uv run datathon tune --model-type lightgbm
-uv run mlflow ui --backend-store-uri file:./mlruns
+uv run mlflow ui --backend-store-uri sqlite:///mlflow/datathon.db
+
+# Or override via env var
+export MLFLOW_TRACKING_URI=sqlite:///mlflow/datathon.db
 ```
 
 Disabled by default — pipeline runs unchanged without a server.

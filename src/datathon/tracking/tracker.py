@@ -62,14 +62,6 @@ class MlflowTracker:
     If ``tracking_uri`` is not configured (null / missing), all methods
     become no-ops so the pipeline still runs without a tracking server.
 
-    Usage
-    -----
-    .. code-block:: python
-
-        tracker = MlflowTracker()
-        with tracker:
-            tracker.log_param("lr", 0.05)
-            tracker.log_metric("mae", 1_000_000)
     """
 
     def __new__(cls, run_name: str | None = None, **overrides: Any):
@@ -94,6 +86,11 @@ class MlflowTracker:
             or os.getenv("MLFLOW_TRACKING_URI")
             or cfg.get("tracking_uri")
         )
+        self.artifact_uri = (
+            overrides.get("artifact_uri")
+            or os.getenv("MLFLOW_ARTIFACT_URI")
+            or cfg.get("artifact_uri")
+        )
         self.experiment_name = overrides.get("experiment_name") or cfg.get(
             "experiment_name", "datathon_forecasting"
         )
@@ -102,6 +99,21 @@ class MlflowTracker:
 
         try:
             mlflow.set_tracking_uri(self.tracking_uri)
+
+            # Ensure parent directory exists for file-based SQLite URIs so that
+            # SQLite does not silently create a read-only fallback.
+            if self.tracking_uri.startswith("sqlite:///"):
+                db_path = Path(self.tracking_uri.replace("sqlite:///", ""))
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if self.artifact_uri:
+                os.environ["MLFLOW_ARTIFACT_URI"] = self.artifact_uri
+                Path(self.artifact_uri.replace("file:", "")).mkdir(parents=True, exist_ok=True)
+
+            exp = mlflow.get_experiment_by_name(self.experiment_name)
+            if exp is None:
+                artifact_location = self.artifact_uri or "file:./mlflow/artifacts"
+                mlflow.create_experiment(self.experiment_name, artifact_location=artifact_location)
             mlflow.set_experiment(self.experiment_name)
 
             self.enabled = True
@@ -131,7 +143,6 @@ class MlflowTracker:
 
     def log_params(self, params: dict[str, Any]) -> None:
         if self.enabled:
-            # Flatten nested dicts one level for MLflow UI
             flat: dict[str, Any] = {}
             for k, v in params.items():
                 if isinstance(v, dict):

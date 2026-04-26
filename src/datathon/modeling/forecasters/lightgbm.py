@@ -18,8 +18,15 @@ class LightGBMForecaster(_DualTargetForecasterMixin, BaseForecaster):
         self._lgbm_kwargs = lgbm_kwargs
 
     def fit(self, X, y_rev, y_cogs, eval_set=None):
-        self.model_rev = lgb.LGBMRegressor(**self._lgbm_kwargs)
-        self.model_cogs = lgb.LGBMRegressor(**self._lgbm_kwargs)
+        rev_kwargs = dict(self._lgbm_kwargs)
+        cogs_kwargs = dict(self._lgbm_kwargs)
+        # Ensure reproducibility — inject random_state if caller forgot.
+        if "random_state" not in rev_kwargs:
+            rev_kwargs["random_state"] = 42
+        if "random_state" not in cogs_kwargs:
+            cogs_kwargs["random_state"] = 42
+        self.model_rev = lgb.LGBMRegressor(**rev_kwargs)
+        self.model_cogs = lgb.LGBMRegressor(**cogs_kwargs)
 
         fit_rev: dict = {}
         fit_cogs: dict = {}

@@ -20,6 +20,11 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
     def fit(self, X, y_rev, y_cogs, eval_set=None):
         rev_kwargs = dict(self._xgb_kwargs)
         cogs_kwargs = dict(self._xgb_kwargs)
+        # Ensure reproducibility
+        if "random_state" not in rev_kwargs:
+            rev_kwargs["random_state"] = 42
+        if "random_state" not in cogs_kwargs:
+            cogs_kwargs["random_state"] = 42
 
         if eval_set is not None:
             X_val, y_rev_val, y_cogs_val = eval_set

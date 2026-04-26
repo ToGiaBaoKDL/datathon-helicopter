@@ -4,7 +4,7 @@ residual_target: false      # true = predict residual vs YoY baseline
 # Optional: discard rows before this date to focus on recent regime.
 # Examples: "2018-01-01" (~5 yr), "2019-01-01" (~4 yr), "2020-01-01" (~3 yr).
 # Must be parsable by pandas.to_datetime().  null = use all data.
-train_start_date: "2018-01-01"
+train_start_date: "2015-01-01"
 
 models:
   lightgbm:
