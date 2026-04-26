@@ -11,6 +11,7 @@ from datathon.commands import (
     download_data,
     ensemble,
     explain,
+    feature_importance,
     predict,
     submit_kaggle,
     train,
@@ -74,6 +75,12 @@ COMMANDS: dict[str, CommandSpec] = {
         parse_args=explain.parse_args,
         run=explain.run,
         print_help=explain.print_help,
+    ),
+    "feature-importance": CommandSpec(
+        description="Analyse feature importance (split, permutation, SHAP).",
+        parse_args=feature_importance.parse_args,
+        run=feature_importance.run,
+        print_help=feature_importance.print_help,
     ),
     "ensemble": CommandSpec(
         description="Average predictions from multiple trained models and submit.",

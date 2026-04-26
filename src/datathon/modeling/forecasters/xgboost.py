@@ -54,3 +54,9 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
         if self.model_cogs is not None and hasattr(self.model_cogs, "best_iteration"):
             cogs_iter = int(self.model_cogs.best_iteration)
         return rev_iter, cogs_iter
+
+    def set_n_estimators(self, n_estimators: int) -> None:
+        if self.model_rev is not None:
+            self.model_rev.n_estimators = n_estimators
+        if self.model_cogs is not None:
+            self.model_cogs.n_estimators = n_estimators

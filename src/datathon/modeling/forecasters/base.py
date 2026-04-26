@@ -47,3 +47,12 @@ class BaseForecaster(ABC):
     @abstractmethod
     def load(cls, path: Path) -> Self:
         """Restore a forecaster previously saved with :meth:`save`."""
+
+    def set_n_estimators(self, n_estimators: int) -> None:
+        """Override the number of boosting rounds without re-fitting.
+
+        Used by :meth:`Trainer.train_final` when the iteration count has already
+        been validated via CV / tuning, so the final model can be fit on the full
+        dataset without an early-stopping holdout.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support set_n_estimators.")

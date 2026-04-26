@@ -9,8 +9,9 @@ import numpy as np
 import optuna
 import pandas as pd
 
-from datathon.modeling.cv import ExpandingWindowCV
+from datathon.modeling.cv import build_cv
 from datathon.modeling.factory import build_forecaster
+from datathon.modeling.metrics import fold_metrics
 from datathon.modeling.recursive import feature_columns, recursive_forecast
 from datathon.tracking import MlflowTracker, OptunaMLflowCallback
 from datathon.utils.config import load_modeling_config, resolve_targets
@@ -62,13 +63,7 @@ def _inject_fixed_params(
     base_config: dict[str, Any],
     model_type: str,
 ) -> dict[str, Any]:
-    """Merge tuned hyperparameters with fixed params from base config.
-
-    Any key present in the base model config but *not* in the tuned config
-    is treated as a fixed param and copied over.  This avoids duplicating
-    boilerplate (``n_estimators``, ``n_jobs``, ``objective``, etc.) in the
-    search space while ensuring the forecaster is fully specified.
-    """
+    """Merge tuned hyperparameters with fixed params from base config."""
     base_model = base_config.get("models", {}).get(model_type, {})
     cfg = dict(tuned_cfg)
     for key, val in base_model.items():
@@ -77,40 +72,28 @@ def _inject_fixed_params(
     return cfg
 
 
-def _make_stop_callback(patience: int = 10) -> callable:
-    """Build an Optuna callback that stops the study after *patience*
-    consecutive completed trials without improvement."""
-
-    def callback(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
-        if len(study.trials) < patience + 1:
-            return
-        complete = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
-        if len(complete) <= patience:
-            return
-        recent = complete[-patience:]
-        best = study.best_value
-        if all(t.value >= best for t in recent):
-            print(
-                f"[Optuna] No improvement for {patience} consecutive trials. "
-                f"Stopping study early (best value: {best:,.0f})."
-            )
-            study.stop()
-
-    return callback
-
-
 def _make_objective(
     df: pd.DataFrame,
     model_type: str,
     base_config: dict[str, Any],
     cogs_column: str,
-    residual_target: bool = False,
+    target_transform: str = "identity",
     n_folds: int = 2,
     horizon_days: int = 548,
+    cv_type: str = "expanding",
+    train_window_days: int = 1096,
+    purge_days: int = 0,
 ) -> callable:
     """Build an Optuna objective that minimises total MAE with per-fold pruning."""
     cogs_is_ratio = cogs_column == "cogs_ratio"
-    revenue_column = "revenue_residual" if residual_target else "revenue"
+    if target_transform == "residual":
+        revenue_column = "revenue_residual"
+    elif target_transform == "log":
+        revenue_column = "log_revenue"
+    else:
+        revenue_column = "revenue"
+
+    cv = build_cv(n_folds, horizon_days, cv_type, train_window_days, purge_days)
 
     def objective(trial: optuna.Trial) -> float:
         if model_type == "lightgbm":
@@ -124,7 +107,6 @@ def _make_objective(
 
         cfg = _inject_fixed_params(cfg, base_config, model_type)
         forecaster = build_forecaster(model_type, {"models": {model_type: cfg}})
-        cv = ExpandingWindowCV(n_folds=n_folds, horizon_days=horizon_days)
         cols = feature_columns(df)
 
         total_maes: list[float] = []
@@ -151,7 +133,7 @@ def _make_objective(
                 val_df[["sales_date"]].rename(columns={"sales_date": "date"}),
                 cols,
                 cogs_is_ratio=cogs_is_ratio,
-                residual_target=residual_target,
+                target_transform=target_transform,
             )
 
             merged = (
@@ -160,18 +142,21 @@ def _make_objective(
                 .merge(pred, on="date", suffixes=("_actual", "_pred"))
             )
 
-            rev_mae = float(
-                np.mean(
-                    np.abs(merged["revenue_actual"].to_numpy() - merged["revenue_pred"].to_numpy())
-                )
+            rev_m = fold_metrics(
+                merged["revenue_actual"].to_numpy(), merged["revenue_pred"].to_numpy()
             )
-            cogs_mae = float(
-                np.mean(np.abs(merged["cogs_actual"].to_numpy() - merged["cogs_pred"].to_numpy()))
-            )
-            fold_total = rev_mae + cogs_mae
-            total_maes.append(fold_total)
+            cogs_m = fold_metrics(merged["cogs_actual"].to_numpy(), merged["cogs_pred"].to_numpy())
+            fold_total_mae = rev_m["mae"] + cogs_m["mae"]
+            total_maes.append(fold_total_mae)
 
-            # Report intermediate result for pruning.
+            trial.set_user_attr("rev_mae", rev_m["mae"])
+            trial.set_user_attr("cogs_mae", cogs_m["mae"])
+            trial.set_user_attr("rev_rmse", rev_m["rmse"])
+            trial.set_user_attr("cogs_rmse", cogs_m["rmse"])
+            trial.set_user_attr("rev_r2", rev_m["r2"])
+            trial.set_user_attr("cogs_r2", cogs_m["r2"])
+            trial.set_user_attr("fold_total_rmse", rev_m["rmse"] + cogs_m["rmse"])
+
             cumulative_mae = float(np.mean(total_maes))
             trial.report(cumulative_mae, step=fold)
 
@@ -190,46 +175,17 @@ def run_study(
     timeout: int | None = None,
     n_folds: int = 2,
     horizon_days: int = 548,
+    cv_type: str = "expanding",
+    train_window_days: int = 1096,
+    purge_days: int = 0,
     study_name: str | None = None,
     storage: str | None = None,
     seed: int = 42,
-    patience: int = 10,
     config_path: Path | None = None,
-) -> tuple[dict[str, Any], float]:
-    """Run an Optuna study and return best params + best total MAE.
-
-    Parameters
-    ----------
-    df:
-        Historical data (already loaded from warehouse).
-    model_type:
-        One of ``lightgbm``, ``xgboost``, ``catboost``.
-    n_trials:
-        Number of Optuna trials (hard upper bound).
-    timeout:
-        Max seconds for the study (``None`` = unlimited).
-    n_folds, horizon_days:
-        CV parameters for the objective.
-    study_name:
-        Name for the Optuna study (defaults to ``datathon_<model_type>``).
-    storage:
-        Optuna storage URL (``None`` = in-memory).  This is *separate* from
-        MLflow tracking; Optuna SQLite DBs are still stored locally.
-    seed:
-        Random seed for reproducibility.
-    patience:
-        Stop the study early if no improvement for this many consecutive
-        completed trials.
-    config_path:
-        Optional path to a delta config overlay (e.g. a previous tuning
-        result to refine from).
-
-    Returns
-    -------
-    (best_params, best_total_mae)
-    """
+) -> tuple[dict[str, Any], float, float, float, float]:
+    """Run an Optuna study and return best params + best total MAE."""
     config = load_modeling_config(config_path)
-    revenue_column, cogs_column, residual_target = resolve_targets(config)
+    revenue_column, cogs_column, target_transform, cogs_is_ratio = resolve_targets(config)
 
     tracker = MlflowTracker(run_name=f"tune_{model_type}")
     with tracker:
@@ -238,6 +194,8 @@ def run_study(
             tracker.log_param("n_trials", n_trials)
             tracker.log_param("n_folds", n_folds)
             tracker.log_param("horizon_days", horizon_days)
+            tracker.log_param("cv_type", cv_type)
+            tracker.log_param("purge_days", purge_days)
             tracker.log_param("seed", seed)
             tracker.log_config(config)
 
@@ -252,10 +210,18 @@ def run_study(
         )
 
         objective = _make_objective(
-            df, model_type, config, cogs_column, residual_target, n_folds, horizon_days
+            df,
+            model_type,
+            config,
+            cogs_column,
+            target_transform,
+            n_folds,
+            horizon_days,
+            cv_type,
+            train_window_days,
+            purge_days,
         )
-        stop_callback = _make_stop_callback(patience=patience)
-        callbacks: list = [stop_callback]
+        callbacks: list = []
         if tracker.enabled:
             callbacks.append(OptunaMLflowCallback(tracker))
 
@@ -274,7 +240,6 @@ def run_study(
         rev_iter = best_trial.user_attrs.get("best_iteration_rev")
         cogs_iter = best_trial.user_attrs.get("best_iteration_cogs")
 
-        # Use the more conservative (larger) ceiling so neither model is cut short.
         best_iter = None
         if rev_iter is not None:
             best_iter = int(rev_iter)
@@ -284,15 +249,24 @@ def run_study(
             key = "iterations" if model_type == "catboost" else "n_estimators"
             best_params[key] = best_iter
 
-        # Merge fixed params so the returned config is self-contained.
         best_params = _inject_fixed_params(best_params, config, model_type)
 
         if tracker.enabled:
             tracker.log_metric("best_total_mae", best_value)
+            tracker.log_metric("best_rev_mae", float(best_trial.user_attrs.get("rev_mae", 0)))
+            tracker.log_metric("best_cogs_mae", float(best_trial.user_attrs.get("cogs_mae", 0)))
+            tracker.log_metric("best_rev_rmse", float(best_trial.user_attrs.get("rev_rmse", 0)))
+            tracker.log_metric("best_cogs_rmse", float(best_trial.user_attrs.get("cogs_rmse", 0)))
+            tracker.log_metric("best_rev_r2", float(best_trial.user_attrs.get("rev_r2", 0)))
+            tracker.log_metric("best_cogs_r2", float(best_trial.user_attrs.get("cogs_r2", 0)))
             tracker.log_params({f"best_{k}": v for k, v in best_params.items()})
             tracker.log_dict(best_params, "best_params.json")
             tracker.set_tag("model_type", model_type)
             tracker.set_tag("status", "tuned")
             tracker.set_tag("optuna_study", study_name)
 
-        return best_params, best_value
+        best_rmse = float(best_trial.user_attrs.get("fold_total_rmse", 0))
+        best_r2_rev = float(best_trial.user_attrs.get("rev_r2", 0))
+        best_r2_cogs = float(best_trial.user_attrs.get("cogs_r2", 0))
+
+        return best_params, best_value, best_rmse, best_r2_rev, best_r2_cogs

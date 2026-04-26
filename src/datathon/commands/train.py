@@ -9,15 +9,17 @@ import pandas as pd
 from rich.table import Table
 
 from datathon.commands.common import CommandError, ensure_no_unknown_args, take_option
-from datathon.modeling.baselines import compute_metrics, seasonal_naive
-from datathon.modeling.cv import ExpandingWindowCV
+from datathon.modeling.baselines import seasonal_naive
+from datathon.modeling.cv import ExpandingWindowCV, SlidingWindowCV, build_cv
 from datathon.modeling.factory import build_forecaster
 from datathon.modeling.forecasters import list_forecasters
+from datathon.modeling.metrics import compute_metrics
 from datathon.modeling.trainer import Trainer
 from datathon.tracking import MlflowTracker
 from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_forecast_base, load_training_data
+from datathon.utils.data_loaders import load_training_data
+from datathon.utils.help_texts import train_help
 from datathon.utils.paths import models_dir, warehouse_path
 
 
@@ -29,6 +31,9 @@ class TrainOptions:
     model_dir: Path
     n_folds: int
     horizon_days: int
+    cv_type: str
+    train_window_days: int
+    purge_days: int
     config_path: Path | None
 
 
@@ -54,11 +59,16 @@ def parse_args(raw_args: list[str]) -> TrainOptions:
 
     n_folds = int(take_option(args, "--n-folds", default="2"))
     horizon_days = int(take_option(args, "--horizon-days", default="548"))
+    cv_type = take_option(args, "--cv-type", default="sliding")
+    train_window_days = int(take_option(args, "--train-window-days", default="1096"))
+    purge_days = int(take_option(args, "--purge-days", default="7"))
 
     config_path_raw = take_option(args, "--config", default="")
     config_path = Path(config_path_raw) if config_path_raw else None
 
     ensure_no_unknown_args(args)
+    if cv_type not in ("expanding", "sliding"):
+        raise CommandError("--cv-type must be 'expanding' or 'sliding'.")
     return TrainOptions(
         mode=mode,
         model_type=model_type,
@@ -66,21 +76,23 @@ def parse_args(raw_args: list[str]) -> TrainOptions:
         model_dir=model_dir,
         n_folds=n_folds,
         horizon_days=horizon_days,
+        cv_type=cv_type,
+        train_window_days=train_window_days,
+        purge_days=purge_days,
         config_path=config_path,
     )
 
 
 def print_help() -> None:
     console.print("[bold]train[/bold]")
-    console.print(
-        "[dim]Usage:[/dim] datathon train --mode <evaluate|train-final> "
-        "[--model-type <type>] [--warehouse <path>] [--model-dir <path>] "
-        "[--n-folds <int>] [--horizon-days <int>] [--config <path>]"
-    )
+    console.print(train_help())
     console.print(
         f"[dim]Available model types:[/dim] {', '.join(list_forecasters())}\n"
-        "[dim]evaluate[/dim]   Run expanding-window CV and print metrics.\n"
+        "[dim]evaluate[/dim]   Run cross-validation and print metrics.\n"
         "[dim]train-final[/dim] Train on full history and save model artifacts.\n"
+        "[dim]--cv-type[/dim]      'expanding' (default) or 'sliding' (fixed training window).\n"
+        "[dim]--train-window-days[/dim]  Training window for 'sliding' CV (default 1096).\n"
+        "[dim]--purge-days[/dim]   Purge gap between train/val to reduce autocorrelation leakage.\n"
         "[dim]--config[/dim]   Optional modeling config path "
         "(defaults to configs/modeling.yaml)."
     )
@@ -88,10 +100,8 @@ def print_help() -> None:
 
 def _evaluate_baseline_on_splits(
     df: pd.DataFrame,
-    n_folds: int,
-    horizon_days: int,
+    cv: ExpandingWindowCV | SlidingWindowCV,
 ) -> dict[str, list[dict[str, float]]]:
-    cv = ExpandingWindowCV(n_folds=n_folds, horizon_days=horizon_days)
     results: dict[str, list[dict[str, float]]] = {"revenue": [], "cogs": []}
 
     for _fold, train_idx, val_idx in cv.split(df):
@@ -122,8 +132,11 @@ def _print_comparison(
     model_results: dict,
     naive_results: dict,
     model_type: str,
+    cv_type: str,
 ) -> None:
-    title = f"Expanding-window CV metrics ({model_type.capitalize()} vs Seasonal Naive)"
+    title = (
+        f"{cv_type.capitalize()}-window CV metrics ({model_type.capitalize()} vs Seasonal Naive)"
+    )
     table = Table(title=title)
     table.add_column("Target")
     table.add_column("Fold")
@@ -153,15 +166,21 @@ def run(options: TrainOptions) -> None:
     df = load_training_data(config, options.warehouse)
     console.print(f"Loaded [bold]{len(df)}[/bold] rows | Model: [bold]{options.model_type}[/bold]")
 
-    revenue_column, cogs_column, residual_target = resolve_targets(config)
+    revenue_column, cogs_column, target_transform, cogs_is_ratio = resolve_targets(config)
 
     forecaster = build_forecaster(options.model_type, config)
-    cv = ExpandingWindowCV(n_folds=options.n_folds, horizon_days=options.horizon_days)
+    cv = build_cv(
+        options.n_folds,
+        options.horizon_days,
+        options.cv_type,
+        options.train_window_days,
+        options.purge_days,
+    )
     trainer = Trainer(
         forecaster=forecaster,
         cv=cv,
         cogs_column=cogs_column,
-        residual_target=residual_target,
+        target_transform=target_transform,
     )
 
     tracker = MlflowTracker(run_name=f"train_{options.model_type}_{options.mode}")
@@ -169,17 +188,16 @@ def run(options: TrainOptions) -> None:
         if tracker.enabled:
             tracker.log_param("model_type", options.model_type)
             tracker.log_param("mode", options.mode)
+            tracker.log_param("cv_type", options.cv_type)
             tracker.log_param("n_folds", options.n_folds)
             tracker.log_param("horizon_days", options.horizon_days)
+            tracker.log_param("purge_days", options.purge_days)
             tracker.log_config(config)
 
         if options.mode == "evaluate":
             model_results = trainer.run_cv(df, tracker=tracker)
-            base_df = load_forecast_base(options.warehouse)
-            naive_results = _evaluate_baseline_on_splits(
-                base_df, options.n_folds, options.horizon_days
-            )
-            _print_comparison(model_results, naive_results, options.model_type)
+            naive_results = _evaluate_baseline_on_splits(df, cv)
+            _print_comparison(model_results, naive_results, options.model_type, options.cv_type)
 
             if tracker.enabled:
                 tracker.set_tag("status", "evaluated")
@@ -196,7 +214,7 @@ def run(options: TrainOptions) -> None:
                 model_type=options.model_type,
                 cv_results=model_results,
                 cogs_column=cogs_column,
-                residual_target=residual_target,
+                target_transform=target_transform,
             )
             console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")
 

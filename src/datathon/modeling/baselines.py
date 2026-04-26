@@ -1,3 +1,5 @@
+"""Simple baseline forecasters for benchmarking."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -17,14 +19,3 @@ def seasonal_naive(
     repeats = int(np.ceil(horizon / seasonal_period))
     forecast = np.tile(tail, repeats)[:horizon]
     return forecast
-
-
-def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    errors = y_pred - y_true
-    mae = float(np.mean(np.abs(errors)))
-    rmse = float(np.sqrt(np.mean(errors**2)))
-
-    denominator = np.sum((y_true - np.mean(y_true)) ** 2)
-    r2 = 0.0 if denominator == 0 else float(1.0 - (np.sum(errors**2) / denominator))
-
-    return {"mae": mae, "rmse": rmse, "r2": r2}

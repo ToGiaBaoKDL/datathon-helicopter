@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import optuna
 
 from datathon.modeling.tuner import (
     _inject_fixed_params,
-    _make_stop_callback,
     _suggest_catboost,
     _suggest_lightgbm,
     _suggest_xgboost,
@@ -46,7 +43,7 @@ class TestSuggestFunctions:
         trial = self._make_trial(
             {
                 "learning_rate": 0.1,
-                "num_leaves": 31,
+                "num_leaves": 30,
                 "max_depth": 6,
                 "min_child_samples": 20,
                 "subsample": 0.8,
@@ -113,49 +110,3 @@ class TestSuggestFunctions:
             "bagging_temperature",
         }
         assert set(cfg.keys()) == expected_keys
-
-
-class TestStopCallback:
-    def test_stops_after_patience_trials_without_improvement(self) -> None:
-        callback = _make_stop_callback(patience=2)
-        study = optuna.create_study(direction="minimize")
-        with patch.object(study, "stop") as mock_stop:
-            # Trial 1: best = 10
-            study.tell(study.ask(), 10.0)
-            callback(study, study.trials[-1])
-            mock_stop.assert_not_called()
-
-            # Trial 2: worse (15)
-            study.tell(study.ask(), 15.0)
-            callback(study, study.trials[-1])
-            mock_stop.assert_not_called()  # only 1 trial without improvement
-
-            # Trial 3: worse (20) -> should trigger stop
-            study.tell(study.ask(), 20.0)
-            callback(study, study.trials[-1])
-            mock_stop.assert_called_once()
-
-    def test_stops_after_consecutive_worse_trials(self) -> None:
-        callback = _make_stop_callback(patience=2)
-        study = optuna.create_study(direction="minimize")
-        with patch.object(study, "stop") as mock_stop:
-            study.tell(study.ask(), 10.0)
-            callback(study, study.trials[-1])
-
-            study.tell(study.ask(), 12.0)  # worse
-            callback(study, study.trials[-1])
-            mock_stop.assert_not_called()  # only 1 worse trial
-
-            study.tell(study.ask(), 13.0)  # worse again -> 2 consecutive worse
-            callback(study, study.trials[-1])
-            mock_stop.assert_called_once()
-
-    def test_no_stop_before_patience_threshold(self) -> None:
-        callback = _make_stop_callback(patience=5)
-        study = optuna.create_study(direction="minimize")
-        with patch.object(study, "stop") as mock_stop:
-            for i in range(3):
-                study.tell(study.ask(), float(i + 1))
-                callback(study, study.trials[-1])
-
-            mock_stop.assert_not_called()

@@ -11,8 +11,10 @@ from datathon.modeling.recursive import recursive_forecast
 from datathon.modeling.trainer import Trainer
 from datathon.tracking import MlflowTracker
 from datathon.utils.competition import submission_columns
+from datathon.utils.config import load_modeling_config
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_modeling_data, load_scaffold
+from datathon.utils.data_loaders import load_scaffold, load_training_data
+from datathon.utils.help_texts import predict_help
 from datathon.utils.paths import models_dir, submissions_dir, warehouse_path
 
 
@@ -58,11 +60,7 @@ def parse_args(raw_args: list[str]) -> PredictOptions:
 
 def print_help() -> None:
     console.print("[bold]predict[/bold]")
-    console.print(
-        "[dim]Usage:[/dim] datathon predict [--model-type <type>] "
-        "[--warehouse <path>] [--model-dir <path>] [--output-path <path>]"
-    )
-    console.print("Load a trained model from disk and generate a submission CSV.")
+    console.print(predict_help())
 
 
 def run(options: PredictOptions) -> None:
@@ -72,16 +70,17 @@ def run(options: PredictOptions) -> None:
             "Run 'datathon train --mode train-final' first."
         )
 
-    forecaster, feature_cols, model_type, cogs_column, residual_target = Trainer.load_artifacts(
+    forecaster, feature_cols, model_type, cogs_column, target_transform = Trainer.load_artifacts(
         options.model_dir
     )
     cogs_is_ratio = cogs_column == "cogs_ratio"
     console.print(
         f"Loaded [bold]{model_type}[/bold] model from [bold]{options.model_dir}[/bold] "
-        f"(COGS target: {cogs_column}, residual: {residual_target})"
+        f"(COGS target: {cogs_column}, transform: {target_transform})"
     )
 
-    history = load_modeling_data(options.warehouse)
+    config = load_modeling_config()
+    history = load_training_data(config, options.warehouse)
     scaffold = load_scaffold(options.warehouse)
     console.print(
         f"History: [bold]{len(history)}[/bold] days | Scaffold: [bold]{len(scaffold)}[/bold] days"
@@ -93,7 +92,7 @@ def run(options: PredictOptions) -> None:
         scaffold=scaffold,
         feature_cols=feature_cols,
         cogs_is_ratio=cogs_is_ratio,
-        residual_target=residual_target,
+        target_transform=target_transform,
     )
 
     expected = submission_columns()
@@ -113,6 +112,6 @@ def run(options: PredictOptions) -> None:
             tracker.log_param("history_days", len(history))
             tracker.log_param("forecast_days", len(scaffold))
             tracker.log_param("cogs_target", cogs_column)
-            tracker.log_param("residual_target", residual_target)
+            tracker.log_param("target_transform", target_transform)
             tracker.log_artifact(options.output_path)
             tracker.set_tag("status", "predicted")

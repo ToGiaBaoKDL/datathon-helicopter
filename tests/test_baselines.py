@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from datathon.modeling.baselines import compute_metrics, seasonal_naive
+from datathon.modeling.baselines import seasonal_naive
+from datathon.modeling.metrics import compute_metrics
 
 
 def test_seasonal_naive_repeats_tail_pattern() -> None:

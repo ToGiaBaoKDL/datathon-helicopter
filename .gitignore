@@ -16,6 +16,8 @@ dbt/target/
 # Evidence / Node
 reports/evidence/node_modules/
 reports/evidence/.evidence/
+reports/evidence/.vscode/
+reports/evidence/.svelte-kit/
 
 # Data and artifacts
 /models/
@@ -30,12 +32,11 @@ warehouse/*.duckdb
 warehouse/*.wal
 !warehouse/.gitkeep
 
-# Optuna tuning studies
-optuna_studies/
-
-# MLflow tracking database
+# ML artifacts
 mlflow/
 mlruns/
+optuna_studies/
+catboost_info/
 
 # Environment
 .env
@@ -46,14 +47,9 @@ mlruns/
 # Jupyter
 notebooks/.ipynb_checkpoints/
 
-# SHAP plots (auto-generated)
-reports/shap/
-
-# CatBoost
-/catboost_info/
-
 # Build artifacts
 *.egg-info/
 dist/
 build/
+reports/evidence/build/
 uv.lock

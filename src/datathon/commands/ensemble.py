@@ -10,8 +10,10 @@ from datathon.modeling.forecasters.ensemble import EnsembleForecaster
 from datathon.modeling.recursive import recursive_forecast
 from datathon.modeling.trainer import Trainer
 from datathon.utils.competition import submission_columns
+from datathon.utils.config import load_modeling_config
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_modeling_data, load_scaffold
+from datathon.utils.data_loaders import load_scaffold, load_training_data
+from datathon.utils.help_texts import ensemble_help
 from datathon.utils.paths import models_dir, submissions_dir, warehouse_path
 
 
@@ -66,20 +68,12 @@ def parse_args(raw_args: list[str]) -> EnsembleOptions:
 
 def print_help() -> None:
     console.print("[bold]ensemble[/bold]")
-    console.print(
-        "[dim]Usage:[/dim] datathon ensemble [--model-types <t1,t2,...>] "
-        "[--weights <w1,w2,...>] [--warehouse <path>] [--model-dir <path>] "
-        "[--output-path <path>]"
-    )
-    console.print(
-        "Load multiple trained models, average their predictions (optionally weighted), "
-        "and generate a submission.\n"
-        "Default models: lightgbm,xgboost,catboost | Default weights: equal"
-    )
+    console.print(ensemble_help())
 
 
 def run(options: EnsembleOptions) -> None:
-    history = load_modeling_data(options.warehouse)
+    config = load_modeling_config()
+    history = load_training_data(config, options.warehouse)
     scaffold = load_scaffold(options.warehouse)
     console.print(
         f"History: [bold]{len(history)}[/bold] days | Scaffold: [bold]{len(scaffold)}[/bold] days"
@@ -88,7 +82,7 @@ def run(options: EnsembleOptions) -> None:
     members: list = []
     feature_cols: list[str] | None = None
     cogs_is_ratio = False
-    residual_target = False
+    target_transform = "identity"
     for model_type in options.model_types:
         model_path = options.model_dir / model_type
         if not model_path.exists():
@@ -97,12 +91,12 @@ def run(options: EnsembleOptions) -> None:
                 f"Run 'datathon train --mode train-final --model-type {model_type}' first."
             )
 
-        forecaster, cols, loaded_type, cogs_col, res_target = Trainer.load_artifacts(model_path)
+        forecaster, cols, loaded_type, cogs_col, trans = Trainer.load_artifacts(model_path)
         members.append(forecaster)
         if feature_cols is None:
             feature_cols = cols
             cogs_is_ratio = cogs_col == "cogs_ratio"
-            residual_target = res_target
+            target_transform = trans
         elif cols != feature_cols:
             raise CommandError(
                 f"Feature mismatch: {model_type} has {len(cols)} features, "
@@ -125,7 +119,7 @@ def run(options: EnsembleOptions) -> None:
         scaffold=scaffold,
         feature_cols=feature_cols,
         cogs_is_ratio=cogs_is_ratio,
-        residual_target=residual_target,
+        target_transform=target_transform,
     )
 
     expected = submission_columns()

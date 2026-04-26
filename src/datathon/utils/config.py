@@ -36,37 +36,45 @@ def load_modeling_config(path: Path | None = None) -> dict[str, Any]:
     return config
 
 
-def resolve_targets(config: dict[str, Any]) -> tuple[str, str, bool]:
-    """Determine revenue / COGS target columns from modeling config.
+def resolve_targets(config: dict[str, Any]) -> tuple[str, str, str, bool]:
+    """Determine revenue / COGS target columns and transform mode."""
+    target_transform = config.get("target_transform", "identity")
+    valid_transforms = ("identity", "residual", "log")
+    if target_transform not in valid_transforms:
+        raise ValueError(
+            f"target_transform must be one of {valid_transforms}. Got: {target_transform!r}"
+        )
 
-    Returns
-    -------
-    (revenue_column, cogs_column, residual_target)
-    """
     cogs_target = config.get("cogs_target", "absolute")
-    residual_target = config.get("residual_target", False)
+    cogs_is_ratio = cogs_target == "ratio"
 
-    if cogs_target == "ratio":
+    if cogs_is_ratio:
         cogs_column = "cogs_ratio"
-    elif residual_target:
+    elif target_transform == "residual":
         cogs_column = "cogs_residual"
+    elif target_transform == "log":
+        cogs_column = "log_cogs"
     else:
         cogs_column = "cogs"
 
-    revenue_column = "revenue_residual" if residual_target else "revenue"
+    if target_transform == "residual":
+        revenue_column = "revenue_residual"
+    elif target_transform == "log":
+        revenue_column = "log_revenue"
+    else:
+        revenue_column = "revenue"
 
-    if residual_target and cogs_target == "ratio":
+    # Backward compat: residual + ratio is still discouraged
+    if target_transform == "residual" and cogs_is_ratio:
         raise ValueError(
-            "Invalid config: cogs_target='ratio' + residual_target=True is an anti-pattern. "
-            "When residual_target=True, COGS should also be predicted as a residual "
+            "Invalid config: cogs_target='ratio' + target_transform='residual' is an anti-pattern. "
+            "When predicting residual revenue, COGS should also be predicted as a residual "
             "(cogs_target='absolute') so that revenue and COGS are independent deviations "
             "from their respective YoY baselines. "
-            "Using ratio causes error compounding because cogs = revenue * ratio, "
-            "and revenue already contains prediction error from the residual model. "
             "Set cogs_target='absolute' in configs/modeling.yaml."
         )
 
-    return revenue_column, cogs_column, residual_target
+    return revenue_column, cogs_column, target_transform, cogs_is_ratio
 
 
 def load_tracking_config() -> dict[str, Any]:

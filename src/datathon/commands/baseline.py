@@ -9,10 +9,12 @@ import pandas as pd
 from rich.table import Table
 
 from datathon.commands.common import CommandError, ensure_no_unknown_args, take_option
-from datathon.modeling.baselines import compute_metrics, seasonal_naive
+from datathon.modeling.baselines import seasonal_naive
+from datathon.modeling.metrics import compute_metrics
 from datathon.utils.competition import submission_columns
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_forecast_base, load_scaffold
+from datathon.utils.help_texts import baseline_help
 from datathon.utils.paths import submissions_dir, warehouse_path
 
 
@@ -66,11 +68,7 @@ def parse_args(raw_args: list[str]) -> BaselineOptions:
 
 def print_help() -> None:
     console.print("[bold]baseline[/bold]")
-    console.print(
-        "[dim]Usage:[/dim] datathon baseline --mode <evaluate|submit> "
-        "[--warehouse <path>] [--seasonal-period <int>] [--output-path <path>]"
-    )
-    console.print("[dim]Note:[/dim] --output-path is only used with --mode submit.")
+    console.print(baseline_help())
 
 
 def _evaluate_baseline(frame: pd.DataFrame, seasonal_period: int) -> None:

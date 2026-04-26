@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from datathon.utils.duckdb_io import connect
@@ -35,6 +36,59 @@ def load_modeling_data(warehouse: Path | None = None) -> pd.DataFrame:
     return df
 
 
+def _ensure_derived_targets(df: pd.DataFrame, target_transform: str) -> pd.DataFrame:
+    """Compute derived target columns (log, residual) if missing."""
+    if target_transform == "log":
+        if "log_revenue" not in df.columns:
+            df["log_revenue"] = np.log1p(df["revenue"])
+        if "log_cogs" not in df.columns:
+            df["log_cogs"] = np.log1p(df["cogs"])
+    return df
+
+
+def load_training_data(
+    config: dict | None = None,
+    warehouse: Path | None = None,
+) -> pd.DataFrame:
+    """Load modeling data and optionally filter by ``train_start_date``."""
+    df = load_modeling_data(warehouse)
+
+    if config is not None:
+        target_transform = config.get("target_transform", "identity")
+        df = _ensure_derived_targets(df, target_transform)
+
+        start_date = config.get("train_start_date")
+        if start_date is not None:
+            try:
+                start_ts = pd.to_datetime(start_date)
+            except Exception as exc:
+                raise ValueError(f"Invalid train_start_date={start_date!r}: {exc}") from exc
+
+            min_date = df["sales_date"].min()
+            max_date = df["sales_date"].max()
+
+            if start_ts < min_date:
+                raise ValueError(
+                    f"train_start_date={start_ts.date()} is before the earliest "
+                    f"data ({min_date.date()})."
+                )
+            if start_ts > max_date:
+                raise ValueError(
+                    f"train_start_date={start_ts.date()} is after the latest "
+                    f"data ({max_date.date()}). After filtering, no rows remain."
+                )
+
+            df = df[df["sales_date"] >= start_ts].copy().reset_index(drop=True)
+
+            if len(df) < 1_000:
+                raise ValueError(
+                    f"train_start_date={start_ts.date()} leaves only {len(df)} rows. "
+                    f"Need at least 1,000 rows for reliable training."
+                )
+
+    return df
+
+
 def load_forecast_base(warehouse: Path | None = None) -> pd.DataFrame:
     """Load ``marts.mart_forecast_daily_base`` (sales_date, revenue, cogs)."""
     wh = warehouse or warehouse_path()
@@ -46,49 +100,6 @@ def load_forecast_base(warehouse: Path | None = None) -> pd.DataFrame:
     with connect(wh) as conn:
         df = conn.execute(query).fetchdf()
     df["sales_date"] = pd.to_datetime(df["sales_date"])
-    return df
-
-
-def load_training_data(
-    config: dict | None = None,
-    warehouse: Path | None = None,
-) -> pd.DataFrame:
-    """Load modeling data and optionally filter by ``train_start_date``."""
-    df = load_modeling_data(warehouse)
-
-    if config is None:
-        return df
-
-    start_date = config.get("train_start_date")
-    if start_date is None:
-        return df
-
-    try:
-        start_ts = pd.to_datetime(start_date)
-    except Exception as exc:
-        raise ValueError(f"Invalid train_start_date={start_date!r}: {exc}") from exc
-
-    min_date = df["sales_date"].min()
-    max_date = df["sales_date"].max()
-
-    if start_ts < min_date:
-        raise ValueError(
-            f"train_start_date={start_ts.date()} is before the earliest data ({min_date.date()})."
-        )
-    if start_ts > max_date:
-        raise ValueError(
-            f"train_start_date={start_ts.date()} is after the latest "
-            f"data ({max_date.date()}). After filtering, no rows remain."
-        )
-
-    df = df[df["sales_date"] >= start_ts].copy().reset_index(drop=True)
-
-    if len(df) < 1_000:
-        raise ValueError(
-            f"train_start_date={start_ts.date()} leaves only {len(df)} rows. "
-            f"Need at least 1,000 rows for reliable training."
-        )
-
     return df
 
 

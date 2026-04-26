@@ -12,6 +12,7 @@ from datathon.modeling.explainer import explain_forecaster
 from datathon.modeling.trainer import Trainer
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_modeling_data
+from datathon.utils.help_texts import explain_help
 from datathon.utils.paths import models_dir, reports_dir, warehouse_path
 
 
@@ -59,14 +60,7 @@ def parse_args(raw_args: list[str]) -> ExplainOptions:
 
 def print_help() -> None:
     console.print("[bold]explain[/bold]")
-    console.print(
-        "[dim]Usage:[/dim] datathon explain [--model-type <type>] [--warehouse <path>] "
-        "[--model-dir <path>] [--output-dir <path>] [--sample-size <int>] [--max-display <int>]"
-    )
-    console.print(
-        "Generate SHAP summary and bar plots for a trained forecaster.\n"
-        "Plots are saved as PNGs under [dim]<output-dir>/[/dim]."
-    )
+    console.print(explain_help())
 
 
 def run(options: ExplainOptions) -> None:
