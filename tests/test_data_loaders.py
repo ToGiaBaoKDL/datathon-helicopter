@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from datathon.utils.data_loaders import load_forecast_base, load_modeling_data, load_scaffold
+from datathon.utils.data_loaders import (
+    load_forecast_base,
+    load_modeling_data,
+    load_scaffold,
+    load_training_data,
+)
 
 
 def _make_mock_conn(df: pd.DataFrame) -> MagicMock:
@@ -71,6 +76,89 @@ class TestLoadForecastBase:
         result = load_forecast_base(warehouse="dummy.duckdb")
         assert list(result.columns) == ["sales_date", "revenue", "cogs"]
         assert pd.api.types.is_datetime64_any_dtype(result["sales_date"])
+
+
+class TestLoadTrainingData:
+    @patch("datathon.utils.data_loaders.connect")
+    def test_no_filter_when_train_start_date_null(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": ["2022-01-01", "2022-01-02", "2022-01-03"],
+                "revenue": [100.0, 200.0, 300.0],
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        result = load_training_data(config={"train_start_date": None}, warehouse="dummy.duckdb")
+        assert len(result) == 3
+
+    @patch("datathon.utils.data_loaders.connect")
+    def test_filters_by_train_start_date(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": pd.date_range("2022-01-01", periods=1002),
+                "revenue": [100.0] * 1002,
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        result = load_training_data(
+            config={"train_start_date": "2022-01-02"}, warehouse="dummy.duckdb"
+        )
+        assert len(result) == 1001
+        assert result["sales_date"].min() == pd.Timestamp("2022-01-02")
+
+    @patch("datathon.utils.data_loaders.connect")
+    def test_rejects_invalid_date_format(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": ["2022-01-01"],
+                "revenue": [100.0],
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        with pytest.raises(ValueError, match="Invalid train_start_date"):
+            load_training_data(config={"train_start_date": "not-a-date"}, warehouse="dummy.duckdb")
+
+    @patch("datathon.utils.data_loaders.connect")
+    def test_rejects_date_after_latest_data(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": pd.date_range("2022-01-01", periods=1002),
+                "revenue": [100.0] * 1002,
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        with pytest.raises(ValueError, match="After filtering, no rows remain"):
+            load_training_data(config={"train_start_date": "2024-12-31"}, warehouse="dummy.duckdb")
+
+    @patch("datathon.utils.data_loaders.connect")
+    def test_rejects_date_before_earliest_data(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": pd.date_range("2022-01-01", periods=1002),
+                "revenue": [100.0] * 1002,
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        with pytest.raises(ValueError, match="before the earliest data"):
+            load_training_data(config={"train_start_date": "2021-12-31"}, warehouse="dummy.duckdb")
+
+    @patch("datathon.utils.data_loaders.connect")
+    def test_rejects_too_few_rows_after_filter(self, mock_connect) -> None:
+        df = pd.DataFrame(
+            {
+                "sales_date": pd.date_range("2022-01-01", periods=999),
+                "revenue": [100.0] * 999,
+            }
+        )
+        mock_connect.return_value.__enter__.return_value = _make_mock_conn(df)
+
+        with pytest.raises(ValueError, match="Need at least 1,000 rows"):
+            load_training_data(config={"train_start_date": "2022-01-02"}, warehouse="dummy.duckdb")
 
 
 class TestLoadScaffold:

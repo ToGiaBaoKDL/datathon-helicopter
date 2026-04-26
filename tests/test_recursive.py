@@ -212,8 +212,9 @@ class TestPrepareFutureFrame:
         scaffold = pd.DataFrame({"date": [pd.Timestamp("2023-01-15")]})
         future = _prepare_future_frame(history, scaffold)
 
-        assert future["is_pre_tet_rush"].iloc[0] == 1  # within 21 days of Tet 2023-01-22
-        assert future["days_to_tet"].iloc[0] == 7
+        # [FS] is_pre_tet_rush commented out — days_to_tet captures same signal
+        # assert future["is_pre_tet_rush"].iloc[0] == 1
+        assert future["days_to_tet"].iloc[0] == 7  # 7 days before Tet 2023-01-22
 
     def test_future_revenue_cogs_are_nan(self) -> None:
         history = self._make_history(10)

@@ -22,7 +22,7 @@ from datathon.tracking import MlflowTracker
 from datathon.utils.competition import submission_columns
 from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_modeling_data, load_scaffold
+from datathon.utils.data_loaders import load_scaffold, load_training_data
 from datathon.utils.paths import models_dir, submissions_dir, warehouse_path
 
 
@@ -215,8 +215,8 @@ def _print_summary(
 
 
 def run(options: CompareOptions) -> None:
-    df = load_modeling_data(options.warehouse)
     config = load_modeling_config(options.config_path)
+    df = load_training_data(config, options.warehouse)
     revenue_column, cogs_column, residual_target = resolve_targets(config)
 
     console.print(

@@ -17,7 +17,7 @@ from datathon.modeling.trainer import Trainer
 from datathon.tracking import MlflowTracker
 from datathon.utils.config import load_modeling_config, resolve_targets
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_forecast_base, load_modeling_data
+from datathon.utils.data_loaders import load_forecast_base, load_training_data
 from datathon.utils.paths import models_dir, warehouse_path
 
 
@@ -149,10 +149,10 @@ def _print_comparison(
 
 
 def run(options: TrainOptions) -> None:
-    df = load_modeling_data(options.warehouse)
+    config = load_modeling_config(options.config_path)
+    df = load_training_data(config, options.warehouse)
     console.print(f"Loaded [bold]{len(df)}[/bold] rows | Model: [bold]{options.model_type}[/bold]")
 
-    config = load_modeling_config(options.config_path)
     revenue_column, cogs_column, residual_target = resolve_targets(config)
 
     forecaster = build_forecaster(options.model_type, config)

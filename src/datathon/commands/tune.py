@@ -10,8 +10,9 @@ import yaml
 from datathon.commands.common import CommandError, ensure_no_unknown_args, take_option
 from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.tuner import run_study
+from datathon.utils.config import load_modeling_config
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_modeling_data
+from datathon.utils.data_loaders import load_training_data
 from datathon.utils.paths import configs_dir, project_root, warehouse_path
 
 
@@ -91,7 +92,8 @@ def print_help() -> None:
 
 
 def run(options: TuneOptions) -> None:
-    df = load_modeling_data(options.warehouse)
+    config = load_modeling_config(options.config_path)
+    df = load_training_data(config, options.warehouse)
     storage = options.storage
     if storage is None:
         storage_path = project_root() / "optuna_studies" / f"{options.model_type}.db"

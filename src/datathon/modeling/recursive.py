@@ -12,18 +12,23 @@ from datathon.modeling.forecasters.base import BaseForecaster
 # Calendar features are always computable from the date.
 CALENDAR_FEATURES = [
     "year",
-    "month",
-    "quarter",
+    # [FS] month — redundant with month_sin/cos, importance 0.0093
+    # "month",
+    # [FS] quarter — redundant with month, importance 0.0020
+    # "quarter",
     "day_of_week",
-    "is_weekend",
+    # [FS-R2] is_weekend — importance 0.0135, no clear pattern
+    # "is_weekend",
     "day_of_month",
     "day_of_year",
     "week_of_year",
     "days_to_month_end",
     "days_to_quarter_end",
     "is_month_start",
-    "is_month_end",
-    "is_quarter_end",
+    # [FS] is_month_end — importance 0.0005
+    # "is_month_end",
+    # [FS] is_quarter_end — importance 0.0000
+    # "is_quarter_end",
     "month_sin",
     "month_cos",
     "day_of_week_sin",
@@ -33,13 +38,19 @@ CALENDAR_FEATURES = [
     "week_of_year_sin",
     "week_of_year_cos",
     "days_to_tet",
-    "is_pre_tet_rush",
-    "is_tet_holiday",
-    "is_post_tet",
-    "is_reunification_day",
-    "is_labor_day",
+    # [FS] is_pre_tet_rush — days_to_tet captures same signal, importance 0.0081
+    # "is_pre_tet_rush",
+    # [FS] is_tet_holiday — days_to_tet captures same signal, importance 0.0048
+    # "is_tet_holiday",
+    # [FS-R2] is_post_tet — importance 0.0087, 97.9% zeros
+    # "is_post_tet",
+    # [FS] is_reunification_day — 1 day/year, importance 0.0000
+    # "is_reunification_day",
+    # [FS-R2] is_labor_day — importance 0.0138, 99.7% zeros
+    # "is_labor_day",
     "is_national_day",
-    "is_decline_era",
+    # [FS] is_decline_era — redundant with days_since_2019, importance 0.0004
+    # "is_decline_era",
     "days_since_2019",
 ]
 
@@ -76,7 +87,8 @@ _TARGET_DERIVED = [
     "roll_mean_28d_revenue",
     "roll_mean_365d_revenue",
     "roll_median_7d_revenue",
-    "roll_median_28d_revenue",
+    # [FS] roll_median_28d_revenue — redundant with roll_mean_28d (corr 0.986), importance 0.0533
+    # "roll_median_28d_revenue",
     "roll_std_7d_revenue",
     "roll_std_28d_revenue",
     "roll_std_365d_revenue",
@@ -257,25 +269,28 @@ def _prepare_future_frame(
     future["sales_date"] = pd.to_datetime(future["sales_date"])
 
     future["year"] = future["sales_date"].dt.year
-    future["month"] = future["sales_date"].dt.month
-    future["quarter"] = future["sales_date"].dt.quarter
+    _month = future["sales_date"].dt.month
+    _quarter = future["sales_date"].dt.quarter
     future["day_of_week"] = future["sales_date"].dt.dayofweek
-    future["is_weekend"] = future["day_of_week"].isin([5, 6]).astype(int)
+    # [FS-R2] is_weekend — importance 0.0135
+    # future["is_weekend"] = future["day_of_week"].isin([5, 6]).astype(int)
     future["day_of_month"] = future["sales_date"].dt.day
     future["day_of_year"] = future["sales_date"].dt.dayofyear
     future["week_of_year"] = future["sales_date"].dt.isocalendar().week.astype(int)
     next_month = future["sales_date"] + pd.offsets.MonthBegin(1)
     future["days_to_month_end"] = (next_month - future["sales_date"]).dt.days
     future["is_month_start"] = (future["day_of_month"] <= 3).astype(int)
-    future["is_month_end"] = (future["day_of_month"] > 28).astype(int)
+    # [FS] is_month_end — importance 0.0005
+    # future["is_month_end"] = (future["day_of_month"] > 28).astype(int)
 
     # Quarter end
     quarter_end = future["sales_date"] + pd.offsets.QuarterEnd(0)
     future["days_to_quarter_end"] = (quarter_end - future["sales_date"]).dt.days
-    future["is_quarter_end"] = (future["days_to_quarter_end"] <= 3).astype(int)
+    # [FS] is_quarter_end — importance 0.0000
+    # future["is_quarter_end"] = (future["days_to_quarter_end"] <= 3).astype(int)
 
-    future["month_sin"] = np.sin(2 * np.pi * future["month"] / 12)
-    future["month_cos"] = np.cos(2 * np.pi * future["month"] / 12)
+    future["month_sin"] = np.sin(2 * np.pi * _month / 12)
+    future["month_cos"] = np.cos(2 * np.pi * _month / 12)
     future["day_of_week_sin"] = np.sin(2 * np.pi * future["day_of_week"] / 7)
     future["day_of_week_cos"] = np.cos(2 * np.pi * future["day_of_week"] / 7)
     _days_in_year = future["sales_date"].apply(lambda d: 366 if d.is_leap_year else 365)
@@ -285,29 +300,33 @@ def _prepare_future_frame(
     future["week_of_year_cos"] = np.cos(2 * np.pi * future["week_of_year"] / 52)
 
     # Vietnamese holidays
-    future["is_reunification_day"] = (
-        (future["month"] == 4) & (future["day_of_month"] == 30)
-    ).astype(int)
-    future["is_labor_day"] = ((future["month"] == 5) & (future["day_of_month"] == 1)).astype(int)
-    future["is_national_day"] = ((future["month"] == 9) & (future["day_of_month"] == 2)).astype(int)
+    # [FS] is_reunification_day — 1 day/year, importance 0.0000
+    # future["is_reunification_day"] = ((_month == 4) & (future["day_of_month"] == 30)).astype(int)
+    # [FS-R2] is_labor_day — importance 0.0138, 99.7% zeros
+    # future["is_labor_day"] = ((_month == 5) & (future["day_of_month"] == 1)).astype(int)
+    future["is_national_day"] = ((_month == 9) & (future["day_of_month"] == 2)).astype(int)
 
     # Structural break era
-    future["is_decline_era"] = (future["year"] >= 2019).astype(int)
+    # [FS] is_decline_era — redundant with days_since_2019, importance 0.0004
+    # future["is_decline_era"] = (future["year"] >= 2019).astype(int)
     future["days_since_2019"] = (future["sales_date"] - pd.Timestamp("2019-01-01")).dt.days
 
     # Tet features
     tet_map = _load_tet_dates()
     future["tet_date"] = future["year"].map(tet_map)
     future["days_to_tet"] = (future["tet_date"] - future["sales_date"]).dt.days
-    future["is_pre_tet_rush"] = (
-        (future["days_to_tet"] > 0) & (future["days_to_tet"] <= 21)
-    ).astype(int)
-    future["is_tet_holiday"] = (
-        (future["days_to_tet"] <= 0) & (future["days_to_tet"] >= -6)
-    ).astype(int)
-    future["is_post_tet"] = ((future["days_to_tet"] < -6) & (future["days_to_tet"] >= -14)).astype(
-        int
-    )
+    # [FS] is_pre_tet_rush — days_to_tet captures same signal, importance 0.0081
+    # future["is_pre_tet_rush"] = (
+    #     (future["days_to_tet"] > 0) & (future["days_to_tet"] <= 21)
+    # ).astype(int)
+    # [FS] is_tet_holiday — days_to_tet captures same signal, importance 0.0048
+    # future["is_tet_holiday"] = (
+    #     (future["days_to_tet"] <= 0) & (future["days_to_tet"] >= -6)
+    # ).astype(int)
+    # [FS-R2] is_post_tet — importance 0.0087, 97.9% zeros
+    # future["is_post_tet"] = (
+    #     (future["days_to_tet"] < -6) & (future["days_to_tet"] >= -14)
+    # ).astype(int)
 
     exogenous_cols = [
         c
