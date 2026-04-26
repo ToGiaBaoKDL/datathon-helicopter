@@ -38,8 +38,13 @@ mlruns/
 optuna_studies/
 catboost_info/
 
-# Environment
+# Environment & secrets
 .env
+*.env
+
+# Kaggle credentials
+kaggle.json
+.kaggle/
 
 # macOS
 .DS_Store
@@ -53,3 +58,6 @@ dist/
 build/
 reports/evidence/build/
 uv.lock
+
+# Local Netlify folder
+.netlify

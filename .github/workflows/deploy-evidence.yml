@@ -1,0 +1,82 @@
+name: Deploy Evidence Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'reports/evidence/**'
+      - 'dbt/**'
+      - 'warehouse/**'
+      - 'configs/**'
+      - '.github/workflows/deploy-evidence.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: reports/evidence/package-lock.json
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --extra dev
+
+      - name: Cache raw data
+        id: cache-data
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: datathon-raw-${{ runner.os }}-${{ hashFiles('configs/competition.yaml') }}
+
+      - name: Download Kaggle data
+        if: steps.cache-data.outputs.cache-hit != 'true'
+        run: uv run datathon download-data
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+
+      - name: Build raw tables
+        run: uv run datathon build-raw --strict
+
+      - name: Build dbt models
+        run: uv run dbt build --project-dir dbt --profiles-dir dbt
+
+      - name: Install Evidence dependencies
+        run: npm ci
+        working-directory: reports/evidence
+
+      - name: Pull Evidence sources
+        run: npm run sources
+        working-directory: reports/evidence
+
+      - name: Build Evidence static site
+        run: npm run build
+        working-directory: reports/evidence
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+
+      - name: Copy Netlify config to build
+        run: cp netlify.toml reports/evidence/build/netlify.toml
+
+      - name: Deploy to Netlify
+        run: npx netlify-cli deploy --prod --dir=reports/evidence/build --message="Deploy ${{ github.sha }}"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
