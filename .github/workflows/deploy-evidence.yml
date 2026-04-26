@@ -1,5 +1,8 @@
 name: Deploy Evidence Dashboard
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   push:
     branches: [main]
@@ -15,9 +18,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    if: |
+      startsWith(github.event.head_commit.message, 'deploy:') ||
+      startsWith(github.event.head_commit.message, 'evidence:') ||
+      startsWith(github.event.head_commit.message, 'ci:') ||
+      startsWith(github.event.head_commit.message, 'feat:') ||
+      startsWith(github.event.head_commit.message, 'fix:') ||
+      github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout
@@ -26,14 +41,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: reports/evidence/package-lock.json
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          cache-dependency-path: uv.lock
 
       - name: Install Python dependencies
         run: uv sync --extra dev
@@ -44,12 +60,13 @@ jobs:
         with:
           path: data/raw
           key: datathon-raw-${{ runner.os }}-${{ hashFiles('configs/competition.yaml') }}
+          restore-keys: |
+            datathon-raw-${{ runner.os }}-
 
       - name: Download Kaggle data
         if: steps.cache-data.outputs.cache-hit != 'true'
         run: uv run datathon download-data
         env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
 
       - name: Build raw tables

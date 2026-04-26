@@ -57,7 +57,6 @@ notebooks/.ipynb_checkpoints/
 dist/
 build/
 reports/evidence/build/
-uv.lock
 
 # Local Netlify folder
 .netlify

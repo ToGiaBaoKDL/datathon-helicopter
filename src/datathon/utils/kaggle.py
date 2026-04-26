@@ -21,10 +21,15 @@ def ensure_kaggle_cli_and_auth() -> None:
             "Kaggle CLI not found. Install with 'uv add kaggle' and configure API credentials."
         )
 
-    if not os.getenv("KAGGLE_USERNAME") or not os.getenv("KAGGLE_KEY"):
+    _hydrate_credentials_from_token()
+
+    has_api_token = bool((os.getenv("KAGGLE_API_TOKEN") or "").strip())
+    has_user_key = bool(os.getenv("KAGGLE_USERNAME") and os.getenv("KAGGLE_KEY"))
+
+    if not (has_api_token or has_user_key):
         raise RuntimeError(
-            "Missing Kaggle credentials. Set KAGGLE_USERNAME and KAGGLE_KEY in .env "
-            "or provide KAGGLE_API_TOKEN."
+            "Missing Kaggle credentials. Set KAGGLE_API_TOKEN in .env "
+            "(json, username:key, or raw key)."
         )
 
 

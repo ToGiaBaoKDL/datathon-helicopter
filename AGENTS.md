@@ -492,6 +492,26 @@ Replaced ad-hoc `scripts/` with modular `audit/` package:
 ### 32. README Cleanup
 Rewrote `README.md` to be concise (reproduce, install, structure, commands) while moving session history detail to `AGENTS.md`.
 
+### 33. CI/CD — Netlify Deploy via GitHub Actions
+- Workflow: `.github/workflows/deploy-evidence.yml`
+- Platform: **Netlify** (static site)
+- Node.js: **22** (LTS)
+- Opt-in Node 24 early: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
+- Kaggle data: downloaded fresh on cache miss (`actions/cache@v4` on `data/raw`)
+- Secrets required: `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID`, `KAGGLE_API_TOKEN`
+
+**Commit prefixes that trigger deploy:**
+```
+deploy:, evidence:, ci:, feat:, fix:
+```
+Other prefixes (`docs:`, `test:`, `chore:`, `refactor:`, ...) do **not** trigger deploy.
+Manual trigger via `workflow_dispatch` always works.
+
+**Security hardening:**
+- `permissions: {}` at workflow level (default deny)
+- `permissions: { contents: read }` at job level (least privilege)
+- `timeout-minutes: 15` (fail-fast on hangs)
+
 ## Quick Commands
 ```bash
 # Full pipeline
