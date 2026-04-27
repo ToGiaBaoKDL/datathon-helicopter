@@ -28,7 +28,6 @@ jobs:
     timeout-minutes: 15
     if: |
       startsWith(github.event.head_commit.message, 'deploy:') ||
-      startsWith(github.event.head_commit.message, 'evidence:') ||
       startsWith(github.event.head_commit.message, 'ci:') ||
       startsWith(github.event.head_commit.message, 'feat:') ||
       startsWith(github.event.head_commit.message, 'fix:') ||
@@ -49,7 +48,6 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-path: uv.lock
 
       - name: Install Python dependencies
         run: uv sync --extra dev
@@ -91,6 +89,15 @@ jobs:
 
       - name: Copy Netlify config to build
         run: cp netlify.toml reports/evidence/build/netlify.toml
+
+      - name: Check build size
+        run: |
+          echo "--- Build size ----------------"
+          du -sh reports/evidence/build/
+          echo "--- Prerendered queries ----------------"
+          ls reports/evidence/build/api/prerendered_queries/ 2>/dev/null | wc -l
+          echo "--- Largest files ----------------
+          find reports/evidence/build/ -type f -exec du -h {} + | sort -rh | head -10
 
       - name: Deploy to Netlify
         run: npx netlify-cli deploy --prod --dir=reports/evidence/build --message="Deploy ${{ github.sha }}"

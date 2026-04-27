@@ -499,6 +499,7 @@ Rewrote `README.md` to be concise (reproduce, install, structure, commands) whil
 - Opt-in Node 24 early: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
 - Kaggle data: downloaded fresh on cache miss (`actions/cache@v4` on `data/raw`)
 - Secrets required: `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID`, `KAGGLE_API_TOKEN`
+- Kaggle auth: single `KAGGLE_API_TOKEN` secret; parsed into `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars for the Kaggle CLI at runtime
 
 **Commit prefixes that trigger deploy:**
 ```
