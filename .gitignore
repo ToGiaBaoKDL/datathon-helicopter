@@ -46,6 +46,19 @@ catboost_info/
 kaggle.json
 .kaggle/
 
+# Editor configs
+.vscode/
+.idea/
+.cursor/
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
 # macOS
 .DS_Store
 

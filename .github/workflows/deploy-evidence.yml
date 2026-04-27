@@ -74,6 +74,16 @@ jobs:
       - name: Build dbt models
         run: uv run dbt build --project-dir dbt --profiles-dir dbt
 
+      - name: Cache Evidence build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            reports/evidence/.svelte-kit
+            reports/evidence/node_modules/.vite
+          key: evidence-build-${{ runner.os }}-${{ hashFiles('reports/evidence/package-lock.json') }}
+          restore-keys: |
+            evidence-build-${{ runner.os }}-
+
       - name: Install Evidence dependencies
         run: npm ci
         working-directory: reports/evidence
@@ -86,7 +96,7 @@ jobs:
         run: npm run build
         working-directory: reports/evidence
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          NODE_OPTIONS: "--max-old-space-size=8192"
 
       - name: Check build size
         run: |
