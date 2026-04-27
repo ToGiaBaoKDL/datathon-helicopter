@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 15
     if: |
       startsWith(github.event.head_commit.message, 'deploy:') ||
+      startsWith(github.event.head_commit.message, 'evidence:') ||
       startsWith(github.event.head_commit.message, 'ci:') ||
       startsWith(github.event.head_commit.message, 'feat:') ||
       startsWith(github.event.head_commit.message, 'fix:') ||
@@ -107,17 +108,31 @@ jobs:
       - name: Deploy to Cloudflare Pages
         id: deploy-cf
         continue-on-error: true
-        run: npx wrangler pages deploy reports/evidence/build --project-name=datathon-evidence --branch=main
+        run: npx wrangler@latest pages deploy reports/evidence/build --project-name=datathon-evidence --branch=main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Report deploy status
         run: |
-          echo "Netlify status: ${{ steps.deploy-netlify.outcome }}"
-          echo "Cloudflare status: ${{ steps.deploy-cf.outcome }}"
+          echo "::notice::Netlify deploy: ${{ steps.deploy-netlify.outcome }}"
+          echo "::notice::Cloudflare deploy: ${{ steps.deploy-cf.outcome }}"
+
+          if [ "${{ steps.deploy-netlify.outcome }}" = "success" ]; then
+            echo "::notice:: Netlify deployed successfully"
+          elif [ "${{ steps.deploy-netlify.outcome }}" = "failure" ]; then
+            echo "::warning:: Netlify deploy failed — falling back to Cloudflare"
+          fi
+
+          if [ "${{ steps.deploy-cf.outcome }}" = "success" ]; then
+            echo "::notice:: Cloudflare Pages deployed successfully"
+          elif [ "${{ steps.deploy-cf.outcome }}" = "failure" ]; then
+            echo "::warning:: Cloudflare Pages deploy failed"
+          fi
+
           if [ "${{ steps.deploy-netlify.outcome }}" = "failure" ] && [ "${{ steps.deploy-cf.outcome }}" = "failure" ]; then
-            echo "Both deploys failed — marking job as failed"
+            echo "::error:: Both deploys failed — no site is live"
             exit 1
           fi
-          echo "At least one deploy succeeded."
+
+          echo "::notice:: At least one platform is live"
