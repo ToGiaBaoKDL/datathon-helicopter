@@ -87,20 +87,37 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
-      - name: Copy Netlify config to build
-        run: cp netlify.toml reports/evidence/build/netlify.toml
-
       - name: Check build size
         run: |
           echo "--- Build size ----------------"
           du -sh reports/evidence/build/
           echo "--- Prerendered queries ----------------"
           ls reports/evidence/build/api/prerendered_queries/ 2>/dev/null | wc -l
-          echo "--- Largest files ----------------
+          echo "--- Largest files ----------------"
           find reports/evidence/build/ -type f -exec du -h {} + | sort -rh | head -10
 
       - name: Deploy to Netlify
+        id: deploy-netlify
+        continue-on-error: true
         run: npx netlify-cli deploy --prod --dir=reports/evidence/build --message="Deploy ${{ github.sha }}"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy-cf
+        continue-on-error: true
+        run: npx wrangler pages deploy reports/evidence/build --project-name=datathon-evidence --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Report deploy status
+        run: |
+          echo "Netlify status: ${{ steps.deploy-netlify.outcome }}"
+          echo "Cloudflare status: ${{ steps.deploy-cf.outcome }}"
+          if [ "${{ steps.deploy-netlify.outcome }}" = "failure" ] && [ "${{ steps.deploy-cf.outcome }}" = "failure" ]; then
+            echo "Both deploys failed — marking job as failed"
+            exit 1
+          fi
+          echo "At least one deploy succeeded."

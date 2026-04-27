@@ -492,26 +492,47 @@ Replaced ad-hoc `scripts/` with modular `audit/` package:
 ### 32. README Cleanup
 Rewrote `README.md` to be concise (reproduce, install, structure, commands) while moving session history detail to `AGENTS.md`.
 
-### 33. CI/CD — Netlify Deploy via GitHub Actions
+### 33. CI/CD — Multi-Platform Deploy (Netlify + Cloudflare Pages)
 - Workflow: `.github/workflows/deploy-evidence.yml`
-- Platform: **Netlify** (static site)
+- Platforms: **Netlify** (primary) + **Cloudflare Pages** (backup/mirror)
 - Node.js: **22** (LTS)
 - Opt-in Node 24 early: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
 - Kaggle data: downloaded fresh on cache miss (`actions/cache@v4` on `data/raw`)
-- Secrets required: `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID`, `KAGGLE_API_TOKEN`
-- Kaggle auth: single `KAGGLE_API_TOKEN` secret; parsed into `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars for the Kaggle CLI at runtime
+- Build once, deploy to both platforms in the same job
+
+**Secrets required:**
+| Secret | Platform | Purpose |
+|--------|----------|---------|
+| `NETLIFY_AUTH_TOKEN` | Netlify | CLI deploy authentication |
+| `NETLIFY_SITE_ID` | Netlify | Target site identifier |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare | Wrangler CLI authentication |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Account identifier |
+| `KAGGLE_API_TOKEN` | — | Kaggle data download |
+
+**Deploy behavior:**
+- Build runs **once** (Python + dbt + Evidence)
+- Netlify deploy runs first (primary)
+- Cloudflare deploy runs second (backup)
+- Both deploys use `continue-on-error: true` — if Netlify is down, Cloudflare still deploys
+- Job fails **only** if **both** deploys fail
 
 **Commit prefixes that trigger deploy:**
 ```
-deploy:, evidence:, ci:, feat:, fix:
+deploy:, ci:, feat:, fix:
 ```
 Other prefixes (`docs:`, `test:`, `chore:`, `refactor:`, ...) do **not** trigger deploy.
-Manual trigger via `workflow_dispatch` always works.
+Manual trigger via `workflow_dispatch` always deploys to both platforms.
 
 **Security hardening:**
 - `permissions: {}` at workflow level (default deny)
 - `permissions: { contents: read }` at job level (least privilege)
 - `timeout-minutes: 15` (fail-fast on hangs)
+
+**Local deploy targets:**
+```bash
+make evidence-deploy      # Netlify only
+make evidence-deploy-cf   # Cloudflare Pages only
+```
 
 ## Quick Commands
 ```bash

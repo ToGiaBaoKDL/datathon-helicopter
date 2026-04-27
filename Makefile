@@ -2,7 +2,7 @@ UV ?= uv
 DBT_PROJECT_DIR ?= dbt
 DBT_PROFILES_DIR ?= dbt
 
-.PHONY: install download-data build-raw dbt-build dbt-test evidence-install evidence-sources evidence-dev evidence-build evidence-deploy test lint
+.PHONY: install download-data build-raw dbt-build dbt-test evidence-install evidence-sources evidence-dev evidence-build evidence-deploy evidence-deploy-cf test lint
 
 install:
 	$(UV) sync --extra dev
@@ -33,6 +33,9 @@ evidence-build:
 
 evidence-deploy:
 	cd reports/evidence && npx netlify deploy --prod --dir=build
+
+evidence-deploy-cf:
+	cd reports/evidence && npx wrangler pages deploy build --project-name=datathon-evidence --branch=main
 
 test:
 	$(UV) run pytest -q
