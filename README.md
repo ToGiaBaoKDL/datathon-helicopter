@@ -127,7 +127,7 @@ make evidence-build      # production build
 make evidence-deploy     # deploy to Netlify
 ```
 
----
+--- 
 
 ## Validation
 
