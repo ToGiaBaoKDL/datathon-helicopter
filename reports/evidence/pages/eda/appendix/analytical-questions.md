@@ -4,8 +4,6 @@ title: Analytical Questions & Findings
 
 # Analytical Questions & Findings
 
-## Quick Stats
-
 ```sql summary_metrics
 select
     avg(session_to_order_rate) as current_conversion,
@@ -15,26 +13,125 @@ from datathon_warehouse.mart_daily_executive_kpis
 where sales_date >= (select max(sales_date) - interval '90 days' from datathon_warehouse.mart_daily_executive_kpis)
 ```
 
+## Quick Stats
+
 <Grid cols=3>
     <BigValue
         data={summary_metrics}
         value=current_conversion
         title="Current Conversion"
-        fmt="0.00%"
+        fmt="pct2"
     />
     <BigValue
         data={summary_metrics}
         value=current_return_rate
         title="Current Return Rate"
-        fmt="0.0%"
+        fmt="pct2"
     />
     <BigValue
         data={summary_metrics}
         value=current_margin
         title="Current Margin"
-        fmt="0.0%"
+        fmt="pct2"
     />
 </Grid>
+
+## Data Sources
+
+```sql q1_conversion_trend
+select
+    date_part('year', sales_date) as year,
+    avg(session_to_order_rate) as conversion_rate,
+    avg(sessions)/1000 as sessions_k
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
+group by 1
+order by 1
+```
+
+```sql q4b_quarterly_revenue
+select
+    date_part('year', sales_date) as year,
+    avg(case when date_part('quarter', sales_date) = 1 then revenue end)/1e6 as q1_rev,
+    avg(case when date_part('quarter', sales_date) = 4 then revenue end)/1e6 as q4_rev
+from datathon_warehouse.mart_daily_executive_kpis
+group by 1
+order by 1
+```
+
+```sql q5_rev_per_visitor
+select
+    date_part('year', sales_date) as year,
+    sum(revenue)::double / sum(sessions) as revenue_per_session,
+    sum(revenue)::double / sum(order_count) as aov
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
+group by 1
+order by 1
+```
+
+```sql q10_segment_margin
+select
+    segment,
+    sum(gross_revenue)/1e9 as revenue_b,
+    sum(gross_profit)/sum(gross_revenue) as margin_rate,
+    avg(return_unit_rate) as return_rate
+from datathon_warehouse.mart_monthly_category_performance
+group by 1
+order by margin_rate desc
+```
+
+```sql q15_channel_retention
+select
+    acquisition_channel,
+    avg(case when months_since_first_order = 1 then retention_rate end) as month1_retention
+from datathon_warehouse.mart_cohort_by_channel_age
+group by 1
+order by month1_retention desc
+```
+
+```sql q18_promo_roi
+select
+    promo_type,
+    count(*) as campaigns,
+    sum(total_net_revenue)/1e9 as revenue_b,
+    sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
+    avg(discount_rate) as avg_discount
+from datathon_warehouse.mart_promotion_effectiveness
+where total_orders > 0
+group by 1
+order by roi desc
+```
+
+```sql open_backlog
+select
+    'High' as priority,
+    'Why did Performance segment margin collapse 2019?' as question,
+    'Product' as domain,
+    'Margin recovery (+6pp)' as estimated_impact
+union all
+select 'High', 'Is bounce rate measurement correct?', 'Marketing', 'Conversion insight'
+union all
+select 'High', 'Why did conversion stabilize at 0.32% floor?', 'Executive', 'Conversion recovery'
+union all
+select 'Medium', 'Do stackable promos destroy margin?', 'Marketing', 'Promo optimization'
+union all
+select 'Medium', 'What drives 10% cancellation rate?', 'Operations', 'Revenue recovery (+10%)'
+union all
+select 'Medium', 'Why white products have higher returns?', 'Product', 'Quality improvement'
+union all
+select 'Medium', 'Do promotional periods show post-promo dip?', 'Marketing', 'Demand forecasting'
+union all
+select 'Medium', 'Are we acquiring customers profitably?', 'Customer', 'CAC/LTV optimization'
+union all
+select 'High', 'Why does gross margin swing 7.9% to 20.7% yearly?', 'Executive', 'Margin stability'
+union all
+select 'Medium', 'Do VIP programs reduce top-decile churn?', 'Customer', 'Revenue protection'
+union all
+select 'Low', 'Are returns concentrated by supplier?', 'Product', 'Targeted QC'
+union all
+select 'Low', 'Payment method impact on conversion?', 'Marketing', 'Checkout optimization'
+```
 
 ---
 
@@ -56,17 +153,6 @@ where sales_date >= (select max(sales_date) - interval '90 days' from datathon_w
 
 <b>Action</b>: Audit checkout flow, page load speed, mobile UX, and payment coverage. A +1pp conversion uplift projects ~150% incremental revenue.
 
-```sql q1_conversion_trend
-select
-    date_part('year', sales_date) as year,
-    avg(session_to_order_rate) as conversion_rate,
-    avg(sessions)/1000 as sessions_k
-from datathon_warehouse.mart_daily_executive_kpis
-where sessions > 0
-group by 1
-order by 1
-```
-
 <BarChart
     data={q1_conversion_trend}
     x=year
@@ -74,7 +160,7 @@ order by 1
     title="Conversion Rate Decline by Year"
     subtitle="The dominant driver of revenue pressure"
     yAxisTitle="Conversion Rate"
-    yFmt="0.00%"
+    yFmt="pct2"
 >
     <ReferenceLine y=1.0 label="1% Benchmark" hideValue=true color=info/>
 </BarChart>
@@ -144,16 +230,6 @@ order by 1
 
 <b>Action</b>: Reallocate Q4 marketing budget to Q1. Test "New Year, New You" campaigns in January instead of Black Friday clones in November.
 
-```sql q4b_quarterly_revenue
-select
-    date_part('year', sales_date) as year,
-    avg(case when date_part('quarter', sales_date) = 1 then revenue end)/1e6 as q1_rev,
-    avg(case when date_part('quarter', sales_date) = 4 then revenue end)/1e6 as q4_rev
-from datathon_warehouse.mart_daily_executive_kpis
-group by 1
-order by 1
-```
-
 <BarChart
     data={q4b_quarterly_revenue}
     x=year
@@ -183,17 +259,6 @@ order by 1
 <b>Interpretation</b>: Volume vs value trade-off. Fewer orders but higher ticket size. The conversion drop (-71%) outweighs the AOV gain (+27%), so total revenue still fell 50%.
 
 <b>Action</b>: The AOV increase is a bright spot. Double down on bundling and cross-sell, but only after fixing the conversion leak.
-
-```sql q5_rev_per_visitor
-select
-    date_part('year', sales_date) as year,
-    sum(revenue)::double / sum(sessions) as revenue_per_session,
-    sum(revenue)::double / sum(order_count) as aov
-from datathon_warehouse.mart_daily_executive_kpis
-where sessions > 0
-group by 1
-order by 1
-```
 
 <LineChart
     data={q5_rev_per_visitor}
@@ -293,17 +358,6 @@ order by 1
 
 <b>Action</b>: Investigate why Activewear revenue is declining despite strong margin. Competitor entry? Assortment narrowing? Marketing underinvestment?
 
-```sql q10_segment_margin
-select
-    segment,
-    sum(gross_revenue)/1e9 as revenue_b,
-    sum(gross_profit)/sum(gross_revenue) as margin_rate,
-    avg(return_unit_rate) as return_rate
-from datathon_warehouse.mart_monthly_category_performance
-group by 1
-order by margin_rate desc
-```
-
 <BarChart
     data={q10_segment_margin}
     x=segment
@@ -314,8 +368,8 @@ order by margin_rate desc
     subtitle="Bar = margin rate, Line = return rate"
     yAxisTitle="Margin Rate"
     y2AxisTitle="Return Rate"
-    yFmt="0.0%"
-    y2Fmt="0.0%"
+    yFmt="pct2"
+    y2Fmt="pct2"
 >
     <ReferenceLine y=0.15 label="15% Target" hideValue=true color=positive/>
 </BarChart>
@@ -402,15 +456,6 @@ order by margin_rate desc
 
 <b>Action</b>: Shift budget toward direct and referral. Tighten paid search keyword targeting to high-intent terms.
 
-```sql q15_channel_retention
-select
-    acquisition_channel,
-    avg(case when months_since_first_order = 1 then retention_rate end) as month1_retention
-from datathon_warehouse.mart_cohort_by_channel_age
-group by 1
-order by month1_retention desc
-```
-
 <BarChart
     data={q15_channel_retention}
     x=acquisition_channel
@@ -418,7 +463,7 @@ order by month1_retention desc
     title="Month-1 Retention by Acquisition Channel"
     subtitle="Direct and referral customers are twice as loyal"
     yAxisTitle="Retention Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
 </BarChart>
@@ -524,19 +569,6 @@ order by month1_retention desc
 <b>Interpretation</b>: Fixed discounts preserve margin better. Percentage discounts erode margin on high-AOV orders.
 
 <b>Action</b>: Test expanding fixed-discount campaigns for high-margin categories.
-
-```sql q18_promo_roi
-select
-    promo_type,
-    count(*) as campaigns,
-    sum(total_net_revenue)/1e9 as revenue_b,
-    sum(total_net_revenue) / nullif(sum(total_discount_amount), 0) as roi,
-    avg(discount_rate) as avg_discount
-from datathon_warehouse.mart_promotion_effectiveness
-where total_orders > 0
-group by 1
-order by roi desc
-```
 
 <BarChart
     data={q18_promo_roi}
@@ -679,35 +711,5 @@ order by roi desc
 ---
 
 ## Open Questions Backlog
-
-```sql open_backlog
-select
-    'High' as priority,
-    'Why did Performance segment margin collapse 2019?' as question,
-    'Product' as domain,
-    'Margin recovery (+6pp)' as estimated_impact
-union all
-select 'High', 'Is bounce rate measurement correct?', 'Marketing', 'Conversion insight'
-union all
-select 'High', 'Why did conversion stabilize at 0.32% floor?', 'Executive', 'Conversion recovery'
-union all
-select 'Medium', 'Do stackable promos destroy margin?', 'Marketing', 'Promo optimization'
-union all
-select 'Medium', 'What drives 10% cancellation rate?', 'Operations', 'Revenue recovery (+10%)'
-union all
-select 'Medium', 'Why white products have higher returns?', 'Product', 'Quality improvement'
-union all
-select 'Medium', 'Do promotional periods show post-promo dip?', 'Marketing', 'Demand forecasting'
-union all
-select 'Medium', 'Are we acquiring customers profitably?', 'Customer', 'CAC/LTV optimization'
-union all
-select 'High', 'Why does gross margin swing 7.9% to 20.7% yearly?', 'Executive', 'Margin stability'
-union all
-select 'Medium', 'Do VIP programs reduce top-decile churn?', 'Customer', 'Revenue protection'
-union all
-select 'Low', 'Are returns concentrated by supplier?', 'Product', 'Targeted QC'
-union all
-select 'Low', 'Payment method impact on conversion?', 'Marketing', 'Checkout optimization'
-```
 
 <DataTable data={open_backlog} rows=10/>

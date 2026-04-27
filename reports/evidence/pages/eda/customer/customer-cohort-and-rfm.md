@@ -184,6 +184,64 @@ group by 1
 order by avg_revenue desc
 ```
 
+```sql cohort_heatmap
+select
+    date_part('year', cohort_month)::varchar || '-' || lpad(date_part('month', cohort_month)::varchar, 2, '0') as cohort_label,
+    months_since_first_order,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+```sql retention_by_channel
+select
+    months_since_first_order,
+    acquisition_channel,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+```sql retention_by_age
+select
+    months_since_first_order,
+    age_group,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+  and acquisition_channel in ${inputs.channel_filter.value}
+  and age_group in ${inputs.age_filter.value}
+group by 1, 2
+order by 1, 2
+```
+
+```sql clv_donut
+select
+    clv_tier as name,
+    revenue_share as value
+from ${clv_tiers}
+```
+
+```sql platinum_share
+select revenue_share as pct
+from ${clv_tiers}
+where clv_tier = 'Platinum'
+```
+
+```sql bronze_share
+select revenue_share as pct
+from ${clv_tiers}
+where clv_tier = 'Bronze'
+```
+
 ## Latest Cohort Snapshot
 
 <Alert status="info">
@@ -228,28 +286,15 @@ Focus on increasing first-repeat rate rather than long-term retention.
     x=months_since_first_order
     y=avg_retention_rate
     title="Average Retention Rate by Cohort Age"
-    subtitle="How cohorts decay over time since first order"
+    subtitle="Retention drops to ~3.5% by month 1 then flatlines"
     yAxisTitle="Retention Rate"
     xAxisTitle="Months Since First Order"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
 </LineChart>
 
 ## Cohort Retention Heatmap
-
-```sql cohort_heatmap
-select
-    date_part('year', cohort_month)::varchar || '-' || lpad(date_part('month', cohort_month)::varchar, 2, '0') as cohort_label,
-    months_since_first_order,
-    avg(retention_rate) as avg_retention_rate
-from datathon_warehouse.mart_cohort_by_channel_age
-where months_since_first_order <= 12
-  and acquisition_channel in ${inputs.channel_filter.value}
-  and age_group in ${inputs.age_filter.value}
-group by 1, 2
-order by 1, 2
-```
 
 <Alert status="info">
 The cohort heatmap is the classic visualization for retention analysis. 
@@ -268,27 +313,44 @@ and columns where all rows stabilize (baseline retention floor).
     value=avg_retention_rate
     title="Cohort Retention Heatmap"
     subtitle="Retention rate by cohort month and months since first order"
-    valueFmt="0.0%"
+    valueFmt="pct2"
 />
 
 ## CLV Tier Distribution
 
 <Alert status="info">
-CLV tiers are quartile-based (Platinum = top 25% by revenue). 
-Platinum customers (top quartile by lifetime revenue) generate the vast majority of total revenue — a classic Pareto distribution.
+CLV tiers are quartile-based — each tier has ~25% of customers. 
+However, <b>Platinum</b> (top 25%) generates <Value data={platinum_share} column=pct fmt=pct2/> of total revenue, 
+while <b>Bronze</b> (bottom 25%) contributes only <Value data={bronze_share} column=pct fmt=pct2/>.
+Platinum + Gold together = ~90% of revenue — a classic Pareto distribution.
 </Alert>
 
 <Alert status="positive">
-Action: Prioritize retention for Platinum and Gold. A small churn in Platinum equates to more revenue at risk 
-than a large churn in Bronze.
+Action: Prioritize retention for Platinum and Gold. Losing 1% of Platinum customers = losing ~0.7% of total revenue.
 </Alert>
+
+<ECharts config={
+    {
+        tooltip: {
+            formatter: '{b}: {c} ({d}%)'
+        },
+        series: [
+            {
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: [...clv_donut],
+            }
+        ]
+    }
+}/>
 
 <BarChart
     data={clv_tiers}
     x=clv_tier
     y=customers
+    swapXY=true
     title="Customer Count by CLV Tier"
-    subtitle="Quartile-based segmentation by lifetime revenue"
+    subtitle="Each quartile has ~25% of customers — equal count, unequal value"
     yAxisTitle="Customers"
     yFmt="num0"
 />
@@ -297,10 +359,11 @@ than a large churn in Bronze.
     data={clv_tiers}
     x=clv_tier
     y=revenue_share
+    swapXY=true
     title="Revenue Share by CLV Tier"
-    subtitle="Contribution to total revenue"
+    subtitle="Revenue concentration: Platinum dominates despite equal customer count"
     yAxisTitle="Revenue Share"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Churn Risk Segments
@@ -320,6 +383,7 @@ For Churned customers, use a "we miss you" campaign with personalized product re
     data={churn_risk}
     x=churn_risk
     y=customers
+    swapXY=true
     title="Customer Count by Churn Risk"
     subtitle="Based on recency vs. historical ordering gap"
     yAxisTitle="Customers"
@@ -330,6 +394,7 @@ For Churned customers, use a "we miss you" campaign with personalized product re
     data={churn_risk}
     x=churn_risk
     y=avg_revenue
+    swapXY=true
     title="Average Lifetime Revenue by Churn Risk"
     subtitle="Revenue at stake in each segment"
     yAxisTitle="Avg Revenue"
@@ -337,19 +402,6 @@ For Churned customers, use a "we miss you" campaign with personalized product re
 />
 
 ## Retention by Acquisition Channel
-
-```sql retention_by_channel
-select
-    months_since_first_order,
-    acquisition_channel,
-    avg(retention_rate) as avg_retention_rate
-from datathon_warehouse.mart_cohort_by_channel_age
-where months_since_first_order <= 12
-  and acquisition_channel in ${inputs.channel_filter.value}
-  and age_group in ${inputs.age_filter.value}
-group by 1, 2
-order by 1, 2
-```
 
 <Alert status="info">
 Retention quality varies dramatically by acquisition channel. 
@@ -371,25 +423,12 @@ For paid search, tighten keyword targeting to high-intent terms rather than broa
     subtitle="Month-0 to month-12 retention decay by channel"
     yAxisTitle="Retention Rate"
     xAxisTitle="Months Since First Order"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
 </LineChart>
 
 ## Retention by Age Group
-
-```sql retention_by_age
-select
-    months_since_first_order,
-    age_group,
-    avg(retention_rate) as avg_retention_rate
-from datathon_warehouse.mart_cohort_by_channel_age
-where months_since_first_order <= 12
-  and acquisition_channel in ${inputs.channel_filter.value}
-  and age_group in ${inputs.age_filter.value}
-group by 1, 2
-order by 1, 2
-```
 
 <Alert status="info">
 <b>55+ customers</b> have the highest month-1 retention, while <b>25–34</b> is the weakest. 
@@ -405,7 +444,7 @@ Older customers are more loyal but represent a smaller segment — the opportuni
     subtitle="Month-0 to month-12 retention decay by age"
     yAxisTitle="Retention Rate"
     xAxisTitle="Months Since First Order"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive/>
 </LineChart>
@@ -421,6 +460,7 @@ All channels are remarkably close in performance, suggesting product-market fit 
     data={channel_comparison}
     x=acquisition_channel
     y=avg_revenue
+    swapXY=true
     title="Avg Lifetime Revenue by Channel"
     subtitle="Which acquisition sources bring the highest-value customers"
     yAxisTitle="Avg Revenue"
@@ -446,6 +486,7 @@ All channels are remarkably close in performance, suggesting product-market fit 
     data={recency_distribution}
     x=recency_bucket
     y=customers
+    swapXY=true
     title="Customer Recency Distribution"
     subtitle="How recently customers placed their last order"
     yAxisTitle="Customers"

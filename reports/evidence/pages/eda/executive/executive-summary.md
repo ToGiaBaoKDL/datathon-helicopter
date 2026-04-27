@@ -196,22 +196,22 @@ limit 1
 
 <Alert status="info">
 <b>1. Revenue Direction</b>: Long-term trend is <Value data={top_insights} column=direction/> 
-(<Value data={top_insights} column=daily_change fmt=num0/> VND/day slope, R² = <Value data={top_insights} column=r2 fmt=pct1/>).
+(<Value data={top_insights} column=daily_change fmt=num0/> VND/day slope, R² = <Value data={top_insights} column=r2 fmt=pct2/>).
 <br/><i>Revenue peaked in <Value data={revenue_peak} column=peak_year/> at <Value data={revenue_peak} column=peak_avg_revenue fmt=num0/> VND/day average, then declined through 2020–2021.</i>
 </Alert>
 
 <Alert status="info">
 <b>2. Best Channel</b>: <Value data={best_channel} column=acquisition_channel/> 
-generates <Value data={best_channel} column=revenue_pct fmt=pct1/> of revenue 
-with <Value data={best_channel} column=avg_margin fmt=pct1/> margin.
+generates <Value data={best_channel} column=revenue_pct fmt=pct2/> of revenue 
+with <Value data={best_channel} column=avg_margin fmt=pct2/> margin.
 </Alert>
 
 <Alert status="info">
-<b>3. Customer Health</b>: <Value data={customer_health} column=active_pct fmt=pct1/> active, 
-<Value data={customer_health} column=at_risk_pct fmt=pct1/> at-risk, 
-<Value data={customer_health} column=churned_pct fmt=pct1/> churned, 
-<Value data={customer_health} column=single_order_pct fmt=pct1/> single-order only.
-<br/><i>The biggest opportunity: <Value data={customer_health} column=single_order_customers fmt=num0/> single-order customers (<Value data={customer_health} column=single_order_pct fmt=pct0/>) never returned.</i>
+<b>3. Customer Health</b>: <Value data={customer_health} column=active_pct fmt=pct2/> active, 
+<Value data={customer_health} column=at_risk_pct fmt=pct2/> at-risk, 
+<Value data={customer_health} column=churned_pct fmt=pct2/> churned, 
+<Value data={customer_health} column=single_order_pct fmt=pct2/> single-order only.
+<br/><i>The biggest opportunity: <Value data={customer_health} column=single_order_customers fmt=num0/> single-order customers (<Value data={customer_health} column=single_order_pct fmt=pct2/>) never returned.</i>
 </Alert>
 
 <Alert status="info">
@@ -246,7 +246,7 @@ with return rate above p95.
 </Alert>
 
 <Alert status="warning">
-<b>4. Margin Volatility</b>: Gross margin peaked at <Value data={margin_peak} column=peak_margin fmt=pct1/> in <Value data={margin_peak} column=peak_year/> and troughed at <Value data={margin_peak} column=trough_margin fmt=pct1/> in <Value data={margin_peak} column=trough_year/>.
+<b>4. Margin Volatility</b>: Gross margin peaked at <Value data={margin_peak} column=peak_margin fmt=pct2/> in <Value data={margin_peak} column=peak_year/> and troughed at <Value data={margin_peak} column=trough_margin fmt=pct2/> in <Value data={margin_peak} column=trough_year/>.
 <Value data={negative_margin_count} column=negative_margin_products fmt=0/> products have negative realized margin due to deep discounting.
 </Alert>
 
@@ -278,7 +278,7 @@ Reallocate weekend budget to Tue–Thu.
 </Alert>
 
 <Alert status="positive">
-<b>Reduce Return Rate</b>: Average return rate is <Value data={return_overall} column=avg_return_rate fmt=pct1/>.
+<b>Reduce Return Rate</b>: Average return rate is <Value data={return_overall} column=avg_return_rate fmt=pct2/>.
 Focus on "defective" and "wrong_size" root causes.
 </Alert>
 
@@ -292,7 +292,7 @@ Focus on "defective" and "wrong_size" root causes.
     subtitle="Demand capture efficiency collapsed after 2013"
     yAxisTitle="Conversion Rate"
     xAxisTitle="Year"
-    yFmt="0.00%"
+    yFmt="pct2"
 >
     <ReferenceLine data={conversion_peak} y=peak_conversion label="Peak" hideValue=true color=positive lineType=dashed/>
     <ReferenceLine data={conversion_peak} y=trough_conversion label="Trough" hideValue=true color=negative lineType=dashed/>

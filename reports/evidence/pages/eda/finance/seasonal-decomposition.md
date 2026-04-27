@@ -91,6 +91,30 @@ left join datathon_warehouse.mart_seasonal_pattern sp
 order by mr.month_start
 ```
 
+```sql yoy_clean
+select
+    month_start,
+    revenue,
+    prev_year_revenue,
+    case when prev_year_revenue > 0
+        then (revenue - prev_year_revenue) / prev_year_revenue
+        else null
+    end as yoy_growth_rate
+from ${yoy_growth}
+where prev_year_revenue is not null
+order by month_start
+```
+
+```sql daily_with_ma
+select
+    sales_date,
+    revenue,
+    avg(revenue) over (order by sales_date rows between 29 preceding and current row) as ma_30d
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
 ## Seasonal Index by Month
 
 <Alert status="info">
@@ -186,20 +210,6 @@ Sustained negative YoY growth means the business is shrinking in real terms —
 seasonal peaks merely mask structural decline.
 </Alert>
 
-```sql yoy_clean
-select
-    month_start,
-    revenue,
-    prev_year_revenue,
-    case when prev_year_revenue > 0
-        then (revenue - prev_year_revenue) / prev_year_revenue
-        else null
-    end as yoy_growth_rate
-from ${yoy_growth}
-where prev_year_revenue is not null
-order by month_start
-```
-
 <LineChart
     data={yoy_clean}
     x=month_start
@@ -207,7 +217,7 @@ order by month_start
     title="Year-over-Year Revenue Growth"
     subtitle="Stripping seasonality to see true business trajectory"
     yAxisTitle="YoY Growth"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0 label="Zero Growth" hideValue=true color=warning/>
 </LineChart>
@@ -219,16 +229,6 @@ The 30-day moving average smooths daily noise and reveals the trend component.
 When daily revenue consistently runs below the moving average, demand is decelerating.
 When above, demand is accelerating.
 </Alert>
-
-```sql daily_with_ma
-select
-    sales_date,
-    revenue,
-    avg(revenue) over (order by sales_date rows between 29 preceding and current row) as ma_30d
-from datathon_warehouse.mart_forecast_daily_base
-where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
-order by sales_date
-```
 
 <LineChart
     data={daily_with_ma}

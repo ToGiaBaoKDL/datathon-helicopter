@@ -119,7 +119,7 @@ and should be reviewed for delisting or repricing.
     subtitle="Margin trajectory across selected product categories"
     yAxisTitle="Gross Margin Rate"
     xAxisTitle="Month"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.15 label="15% Target" hideValue=true color=positive/>
 </LineChart>
@@ -162,7 +162,7 @@ Low revenue + high return rate = double crisis — fix quality first.
     title="Monthly Return Rate by Category"
     subtitle="Quality signal across selected categories"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
 </LineChart>

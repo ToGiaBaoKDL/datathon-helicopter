@@ -150,49 +150,6 @@ group by 1, 2
 order by 1
 ```
 
-## Promo Type Summary
-
-<Alert status="info">
-Percentage promos (<Value data={promo_type_pivot} column=pct_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=pct_revenue fmt=num0/> VND revenue at <Value data={promo_type_pivot} column=pct_discount_rate fmt=pct1/> average discount rate. 
-Fixed promos (<Value data={promo_type_pivot} column=fixed_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=fixed_revenue fmt=num0/> VND at <Value data={promo_type_pivot} column=fixed_discount_rate fmt=pct1/> rate. Scale vs efficiency trade-off is clear.
-</Alert>
-
-<Alert status="positive">
-Action: Fixed-discount campaigns show significantly higher ROI per discount VND than percentage campaigns, but with far fewer runs. 
-Test expanding fixed-discount promos for high-margin categories where discount depth matters less.
-</Alert>
-
-<BarChart
-    data={promo_summary}
-    x=promo_type
-    y=total_revenue
-    title="Revenue by Promotion Type"
-    subtitle="Percentage vs fixed discount campaigns"
-    yAxisTitle="Net Revenue"
-    yFmt="num0"
-/>
-
-<BarChart
-    data={promo_summary}
-    x=promo_type
-    y=avg_discount_rate
-    title="Average Discount Rate by Type"
-    subtitle="Fixed promos have lower discount depth"
-    yAxisTitle="Discount Rate"
-    yFmt="0.0%"
-/>
-
-## Campaign Timeline
-
-<Alert status="info">
-Campaign-level detail. High-revenue campaigns are not always high-discount — the most efficient promos 
-combine modest discount depth with strong channel reach.
-</Alert>
-
-<DataTable data={promo_timeline} rows=10 />
-
-## Promotion Category Impact
-
 ```sql category_impact
 select
     coalesce(applicable_category, 'All Categories') as category_scope,
@@ -225,6 +182,47 @@ where applicable_category is not null
 order by applicable_category, total_revenue desc
 ```
 
+## Promo Type Summary
+
+<Alert status="info">
+Percentage promos (<Value data={promo_type_pivot} column=pct_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=pct_revenue fmt=num0/> VND revenue at <Value data={promo_type_pivot} column=pct_discount_rate fmt=pct2/> average discount rate. 
+Fixed promos (<Value data={promo_type_pivot} column=fixed_campaigns fmt=0/> campaigns) drive <Value data={promo_type_pivot} column=fixed_revenue fmt=num0/> VND at <Value data={promo_type_pivot} column=fixed_discount_rate fmt=pct2/> rate. Scale vs efficiency trade-off is clear.
+</Alert>
+
+<Alert status="positive">
+Action: Fixed-discount campaigns show significantly higher ROI per discount VND than percentage campaigns, but with far fewer runs. 
+Test expanding fixed-discount promos for high-margin categories where discount depth matters less.
+</Alert>
+
+<BarChart
+    data={promo_summary}
+    x=promo_type
+    y=total_revenue
+    title="Revenue by Promotion Type"
+    subtitle="Percentage: 45 campaigns, 5.1B VND vs Fixed: 5 campaigns, 0.4B VND"
+    yAxisTitle="Net Revenue"
+    yFmt="num0"
+/>
+
+<BarChart
+    data={promo_summary}
+    x=promo_type
+    y=avg_discount_rate
+    title="Average Discount Rate by Type"
+    subtitle="Fixed promos have lower discount depth"
+    yAxisTitle="Discount Rate"
+    yFmt="pct2"
+/>
+
+## Campaign Timeline
+
+<Alert status="info">
+Campaign-level detail. High-revenue campaigns are not always high-discount — the most efficient promos 
+combine modest discount depth with strong channel reach.
+</Alert>
+
+<DataTable data={promo_timeline} rows=10 />
+
 <Alert status="info">
 <b>Category-restricted promotions</b> show different efficiency profiles than <b>site-wide</b> campaigns. 
 Category promos typically have higher AOV but lower total scale — they attract buyers with existing category intent.
@@ -252,7 +250,7 @@ rather than always defaulting to site-wide percentage discounts.
     title="Average Discount Rate by Category Scope"
     subtitle="Do category promos require deeper discounts?"
     yAxisTitle="Discount Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 <BarChart
@@ -265,16 +263,14 @@ rather than always defaulting to site-wide percentage discounts.
     yFmt="num0"
 />
 
-<DataTable data={category_detail} rows=10 />
-
 ## Discount Depth vs Revenue
 
 <Alert status="warning">
 Higher discount rates do not always yield higher revenue. The scatter reveals a "diminishing returns" zone 
-where deep discounts (>20%) fail to lift revenue proportionally — classic margin erosion without volume compensation.
+where deep discounts (above 20%) fail to lift revenue proportionally — classic margin erosion without volume compensation.
 </Alert>
 
-<ScatterPlot
+<BubbleChart
     data={promo_vs_discount}
     x=discount_rate
     y=total_revenue
@@ -284,12 +280,12 @@ where deep discounts (>20%) fail to lift revenue proportionally — classic marg
     subtitle="Bubble size = total orders. Top-left = efficient; bottom-right = margin destroyers"
     xAxisTitle="Discount Rate"
     yAxisTitle="Net Revenue"
-    xFmt="0.0%"
+    xFmt="pct2"
     yFmt="num0"
 >
     <ReferenceLine data={avg_discount} x=avg_discount label="Avg Discount" hideValue=true color=info/>
     <ReferenceArea xMin=0.20 label="Diminishing Returns" color=warning opacity=0.18/>
-</ScatterPlot>
+</BubbleChart>
 
 ## Channel Breakdown
 
@@ -311,7 +307,7 @@ Email and social typically have lower CAC; paid search and display require tight
 ## Daily Discount Pressure
 
 <Alert status="warning">
-Heavy discounting erodes margin. Days with discount >10% of revenue warrant investigation 
+Heavy discounting erodes margin. Days with discount above 10% of revenue warrant investigation 
 into whether the lift justifies the margin sacrifice. Sustained high-discount periods suggest weak organic demand.
 </Alert>
 

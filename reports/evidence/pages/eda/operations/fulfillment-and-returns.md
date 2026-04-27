@@ -139,6 +139,15 @@ group by 1, 2
 order by 1, 2
 ```
 
+```sql return_calendar
+select
+    sales_date,
+    return_record_rate
+from datathon_warehouse.mart_daily_returns_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
 ## Delivery Performance
 
 <Alert status="info">
@@ -147,8 +156,8 @@ This is a strength — unlike conversion or revenue, fulfillment reliability has
 </Alert>
 
 <Alert status="warning">
-Only <Value data={latest_fulfillment} column=free_shipping_share fmt=pct1/> of orders have free shipping. In e-commerce, free shipping is one of the highest-ROI conversion tactics. 
-With average shipping fee at only <Value data={latest_fulfillment} column=avg_shipping_fee fmt=num0/> VND (effectively free already), the business should test 
+Only <Value data={latest_fulfillment} column=free_shipping_share fmt=pct2/> of orders have free shipping. In e-commerce, free shipping is one of the highest-ROI conversion tactics.
+With average shipping fee at only <Value data={latest_fulfillment} column=avg_shipping_fee fmt=num0/> VND (effectively free already), the business should test
 "free shipping on all orders" messaging to remove the psychological barrier.
 </Alert>
 
@@ -178,7 +187,7 @@ With average shipping fee at only <Value data={latest_fulfillment} column=avg_sh
     x=sales_date
     y=avg_days_to_deliver
     title="Average Days to Deliver"
-    subtitle="End-to-end delivery speed trend"
+    subtitle="Stable ~6 days delivery across the entire period"
     yAxisTitle="Days"
     xAxisTitle="Date"
     yFmt="0"
@@ -207,10 +216,19 @@ Action: Focus on controllable return reasons — "defective" and "wrong_size" ar
     subtitle="Record rate (lines) vs Unit rate (units) — divergence signals batch defects"
     yAxisTitle="Return Rate"
     xAxisTitle="Date"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
 </LineChart>
+
+<CalendarHeatmap
+    data={return_calendar}
+    date=sales_date
+    value=return_record_rate
+    title="Daily Return Rate Calendar"
+    subtitle="Return risk intensity by day — identify clusters of quality issues"
+    valueFmt="pct2"
+/>
 
 ## Return Root Causes
 
@@ -220,7 +238,7 @@ Defective and wrong-size returns are operational failures; changed-mind returns 
 </Alert>
 
 <Alert status="warning">
-<b><Value data={top_return_reason} column=return_reason/></b> is the dominant return reason (<Value data={top_return_reason} column=reason_count fmt=num0/> returns, <Value data={top_return_reason} column=reason_pct fmt=pct1/> of total). 
+<b><Value data={top_return_reason} column=return_reason/></b> is the dominant return reason (<Value data={top_return_reason} column=reason_count fmt=num0/> returns, <Value data={top_return_reason} column=reason_pct fmt=pct2/> of total). 
 This is a controllable operational failure — fixable with supplier QC and sizing guides.
 </Alert>
 
@@ -241,7 +259,7 @@ This is a controllable operational failure — fixable with supplier QC and sizi
     title="Return Reason Share"
     subtitle="Percentage of total returns by root cause"
     yAxisTitle="Share of Returns"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Return Patterns
@@ -258,7 +276,7 @@ proactive quality checks before dispatch.
     title="Average Return Rate by Day of Week"
     subtitle="Pinpoints weekly return friction clusters"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative/>
 </BarChart>
@@ -271,7 +289,7 @@ proactive quality checks before dispatch.
     title="Monthly Return Rate by Year"
     subtitle="Seasonal return quality pattern"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Daily Detail

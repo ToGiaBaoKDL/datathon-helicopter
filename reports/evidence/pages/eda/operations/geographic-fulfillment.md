@@ -111,6 +111,7 @@ to reduce single-region risk from logistics disruption, local competition, or re
 </Alert>
 
 <BarChart
+    swapXY=true
     data={region_revenue}
     x=region
     y=total_revenue
@@ -123,18 +124,20 @@ to reduce single-region risk from logistics disruption, local competition, or re
 </BarChart>
 
 <BarChart
+    swapXY=true
     data={region_revenue}
     x=region
     y=gross_margin_rate
     title="Gross Margin Rate by Region"
     subtitle="Which regions are most profitable"
     yAxisTitle="Margin Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.15 label="15% Target" hideValue=true color=positive/>
 </BarChart>
 
 <BarChart
+    swapXY=true
     data={region_revenue}
     x=region
     y=total_customers
@@ -157,6 +160,7 @@ given that current delivery speed is already uniform (~6 days) across all region
 </Alert>
 
 <BarChart
+    swapXY=true
     data={region_fulfillment}
     x=region
     y=avg_days_to_deliver
@@ -169,6 +173,7 @@ given that current delivery speed is already uniform (~6 days) across all region
 </BarChart>
 
 <BarChart
+    swapXY=true
     data={region_fulfillment}
     x=region
     y=avg_shipping_fee
@@ -181,13 +186,14 @@ given that current delivery speed is already uniform (~6 days) across all region
 </BarChart>
 
 <BarChart
+    swapXY=true
     data={region_fulfillment}
     x=region
     y=return_unit_rate
     title="Return Rate by Region"
     subtitle="Quality or sizing issues by geography"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=warning/>
 </BarChart>

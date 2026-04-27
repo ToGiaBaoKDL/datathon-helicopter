@@ -19,30 +19,6 @@ select distinct breakdown_type from datathon_warehouse.mart_daily_conversion_bre
 select distinct breakdown_value from datathon_warehouse.mart_daily_conversion_breakdown order by 1
 ```
 
-<DateRange
-    name=date_range
-    data={_date_bounds}
-    dates=sales_date
-/>
-
-<Dropdown
-    name=type_filter
-    data={_breakdown_types}
-    value=breakdown_type
-    multiple=true
-    selectAllByDefault=true
-    title="Breakdown Type"
-/>
-
-<Dropdown
-    name=value_filter
-    data={_breakdown_values}
-    value=breakdown_value
-    multiple=true
-    selectAllByDefault=true
-    title="Breakdown Value"
-/>
-
 ```sql funnel_summary
 select
     breakdown_value as dimension,
@@ -149,6 +125,30 @@ group by 1
 order by avg_cancellation_rate desc
 ```
 
+<DateRange
+    name=date_range
+    data={_date_bounds}
+    dates=sales_date
+/>
+
+<Dropdown
+    name=type_filter
+    data={_breakdown_types}
+    value=breakdown_type
+    multiple=true
+    selectAllByDefault=true
+    title="Breakdown Type"
+/>
+
+<Dropdown
+    name=value_filter
+    data={_breakdown_values}
+    value=breakdown_value
+    multiple=true
+    selectAllByDefault=true
+    title="Breakdown Value"
+/>
+
 ## Demand Capture Overview
 
 <Alert status="info">
@@ -164,7 +164,7 @@ a directional comparison across dimensions, not an exact period-level rate.
     title="Approximate Conversion Rate by Dimension"
     subtitle="Which device, source, or payment method captures demand best"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.005 label="0.5% Target" hideValue=true color=positive lineType=dashed/>
 </BarChart>
@@ -176,7 +176,7 @@ a directional comparison across dimensions, not an exact period-level rate.
     title="Cancellation Rate by Dimension"
     subtitle="High cancellation signals checkout friction or intent mismatch"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.10 label="10% Alert" hideValue=true color=warning/>
 </BarChart>
@@ -196,7 +196,7 @@ tablet UX has friction or whether tablet users are earlier in the purchase journ
     title="Conversion Rate by Device Type"
     subtitle="Desktop vs mobile vs tablet demand capture"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.005 label="0.5% Target" hideValue=true color=positive lineType=dashed/>
     <ReferencePoint data={tablet_conversion} x="tablet" y=avg_conversion_rate label="Investigate UX" labelPosition=top color=warning/>
@@ -220,7 +220,7 @@ before the courier arrives. Credit card and digital wallets commit buyers at che
 </Alert>
 
 <Alert status="positive">
-Action: If COD cancellation is >2× credit card, introduce a "confirm by SMS" step for COD orders 
+Action: If COD cancellation is more than 2× credit card, introduce a "confirm by SMS" step for COD orders 
 to reduce last-mile waste and logistics cost.
 </Alert>
 
@@ -231,7 +231,7 @@ to reduce last-mile waste and logistics cost.
     title="Conversion Rate by Payment Method"
     subtitle="Credit card and digital wallets convert best"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 <BarChart
@@ -241,7 +241,7 @@ to reduce last-mile waste and logistics cost.
     title="Cancellation Rate by Payment Method"
     subtitle="COD and bank transfer show highest checkout regret"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Traffic Source Quality
@@ -259,7 +259,7 @@ Email and direct traffic often carry loyal, higher-value buyers.
     title="Conversion Rate by Traffic Source"
     subtitle="Organic search vs paid vs social vs email"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 <BarChart
@@ -287,7 +287,7 @@ If paid search conversion drops while spend stays flat, you are buying low-inten
     title="Daily Conversion Rate Trend"
     subtitle="Track conversion stability by segment"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.005 label="0.5% Target" hideValue=true color=positive lineType=dashed/>
 </LineChart>

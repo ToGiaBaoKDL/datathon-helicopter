@@ -88,7 +88,7 @@ A flag = 1 means the day was an extreme outlier — not just a bad day, but a st
 </Alert>
 
 <Alert status="warning">
-<b>Conversion drop</b> is the most frequent flag (<Value data={flag_frequency} column=flag_count fmt=0/> days, <Value data={flag_frequency} column=flag_pct fmt=pct1/> of selected period) and the most dangerous. Days below p10 conversion 
+<b>Conversion drop</b> is the most frequent flag (<Value data={flag_frequency} column=flag_count fmt=0/> days, <Value data={flag_frequency} column=flag_pct fmt=pct2/> of selected period) and the most dangerous. Days below p10 conversion 
 are bleeding revenue despite normal traffic. This is a structural problem, not a seasonal blip.
 </Alert>
 

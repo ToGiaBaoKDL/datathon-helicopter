@@ -35,6 +35,20 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [Category and Region Performance](./eda/product/category-and-region-performance)
 - [Reviews and Quality](./eda/product/reviews-and-quality)
 
+### Business Stories (Narratives)
+- [The Demand Capture Crisis](./eda/stories/01-demand-capture-crisis)
+- [The Retention Trap](./eda/stories/02-retention-trap)
+- [The Promo Paradox](./eda/stories/03-promo-paradox)
+- [The Inventory Capital Trap](./eda/stories/04-inventory-capital-trap)
+- [The Profitability Leak](./eda/stories/05-profitability-leak)
+- [Quality Before Growth](./eda/stories/06-quality-before-growth)
+- [The Cannibalization Test](./eda/stories/07-cannibalization-test)
+- [RFM — Who Pays the Bills?](./eda/stories/08-rfm-who-pays)
+- [The Geographic Cost Puzzle](./eda/stories/09-geographic-cost-puzzle)
+- [The COD Tax](./eda/stories/10-cod-tax)
+- [The Seasonality Paradox](./eda/stories/11-seasonality-paradox)
+- [The Portfolio Drift](./eda/stories/12-portfolio-drift)
+
 ### Appendix
 - [Analytical Questions & Findings](./eda/appendix/analytical-questions)
 - [Part 1 MCQ Metrics](./eda/appendix/part1-mcq-metrics)

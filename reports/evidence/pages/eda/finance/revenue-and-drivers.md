@@ -208,11 +208,11 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 
 <Alert status="info">
 Revenue trend slope: <Value data={revenue_trend} column=daily_slope fmt=num0/> VND/day 
-(R² = <Value data={revenue_trend} column=r2 fmt=pct1/>).
+(R² = <Value data={revenue_trend} column=r2 fmt=pct2/>).
 </Alert>
 
 <Alert status="warning">
-R² = <Value data={revenue_trend} column=r2 fmt=pct1/> means the linear model explains almost nothing. The real story is a <b>structural break</b>: 
+R² = <Value data={revenue_trend} column=r2 fmt=pct2/> means the linear model explains almost nothing. The real story is a <b>structural break</b>: 
 revenue rose to a peak around <Value data={conversion_peak} column=peak_year/> then collapsed — a dramatic drop. 
 This is not gradual decline; it's a regime change. The cause: conversion collapse from <Value data={conversion_peak} column=peak_conversion fmt=pct2/> to <Value data={conversion_peak} column=trough_conversion fmt=pct2/>, not traffic loss.
 </Alert>
@@ -260,7 +260,7 @@ The gap between the two lines is unconverted traffic — the primary lever for r
     yAxisTitle="Sessions / Orders"
     xAxisTitle="Date"
     title="Daily Sessions vs Orders"
-    subtitle="Demand generation and captured transactions"
+    subtitle="Sessions vs orders — the capture gap is the growth lever"
     yFmt="num0"
 />
 
@@ -288,7 +288,7 @@ Sustained increases suggest root causes in fulfillment, sizing, or defects.
 ## Discount Pressure
 
 <Alert status="warning">
-Heavy discounting erodes margin. Days with discount > 10% of revenue warrant investigation 
+Heavy discounting erodes margin. Days with discount above 10% of revenue warrant investigation 
 into whether the lift justifies the margin sacrifice.
 </Alert>
 
@@ -318,6 +318,7 @@ Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak deman
     data={revenue_heatmap_dow}
     x=day_name
     y=avg_revenue
+    swapXY=true
     title="Average Revenue by Day of Week"
     subtitle="Reveals intra-week trading patterns"
     yAxisTitle="Avg Revenue"
@@ -356,7 +357,7 @@ YoY tells you if performance is actually declining relative to the same period l
     title="Year-over-Year Revenue Growth"
     subtitle="Same month vs prior year — eliminates seasonality"
     yAxisTitle="YoY Growth"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
 </BarChart>
@@ -368,7 +369,7 @@ YoY tells you if performance is actually declining relative to the same period l
     title="Month-over-Month Revenue Growth"
     subtitle="Sequential monthly change — captures momentum"
     yAxisTitle="MoM Growth"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
 </BarChart>
@@ -392,7 +393,7 @@ If it correlates with deep discounts, it's a pricing/promo code issue.
     title="Monthly Cancellation Rate"
     subtitle="Share of order lines cancelled before fulfillment"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.10 label="10% Alert" hideValue=true color=warning/>
 </LineChart>

@@ -103,7 +103,16 @@ group by 1, 2
 order by 1, 2
 ```
 
-## Inventory Health Overview
+```sql engagement_daily
+select
+    sales_date,
+    bounce_rate,
+    pages_per_session,
+    avg_session_duration_sec
+from datathon_warehouse.mart_daily_marketing_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
 
 ```sql inventory_kpis
 select
@@ -117,9 +126,11 @@ where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as dat
   and sales_date <= cast('${inputs.date_range.end}' as date)
 ```
 
+## Inventory Health Overview
+
 <Alert status="warning">
 The business carries <b><Value data={inventory_kpis} column=avg_days_supply fmt=0/> days of supply</b> on average — multiple years of inventory. 
-With a sell-through rate of only <Value data={inventory_kpis} column=avg_sell_through fmt=pct1/>, working capital is severely tied up in slow-moving stock. 
+With a sell-through rate of only <Value data={inventory_kpis} column=avg_sell_through fmt=pct2/>, working capital is severely tied up in slow-moving stock. 
 This is a bigger problem than stockouts.
 </Alert>
 
@@ -139,13 +150,13 @@ Action: Target 90 days of supply (industry standard). A reduction to 90 days wou
         data={inventory_kpis}
         value=avg_fill_rate
         title="Fill Rate"
-        fmt="0.0%"
+        fmt="pct2"
     />
     <BigValue
         data={inventory_kpis}
         value=avg_sell_through
         title="Sell-Through Rate"
-        fmt="0.0%"
+        fmt="pct2"
     />
     <BigValue
         data={inventory_kpis}
@@ -195,22 +206,11 @@ Watch for revenue growth lagging order growth (discounting pressure) or outpacin
     subtitle="Bar = revenue growth, Line = order growth"
     yAxisTitle="Revenue Growth"
     y2AxisTitle="Order Growth"
-    yFmt="0.0%"
-    y2Fmt="0.0%"
+    yFmt="pct2"
+    y2Fmt="pct2"
 >
     <ReferenceLine y=0 label="Zero Growth" hideValue=true color=info/>
 </BarChart>
-
-```sql engagement_daily
-select
-    sales_date,
-    bounce_rate,
-    pages_per_session,
-    avg_session_duration_sec
-from datathon_warehouse.mart_daily_marketing_kpis
-where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
-order by sales_date
-```
 
 ## Engagement Quality Trend
 
@@ -227,7 +227,7 @@ almost all visitors browse multiple pages. This is either exceptional engagement
     title="Daily Bounce Rate"
     subtitle="Share of sessions viewing only one page"
     yAxisTitle="Bounce Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=info/>
 </LineChart>
@@ -262,7 +262,7 @@ A +1pp conversion lift would project ~150% incremental revenue.
     subtitle="Daily demand capture efficiency"
     yAxisTitle="Conversion Rate"
     xAxisTitle="Date"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.012 label="2013 Peak" hideValue=true color=positive lineType=dashed/>
     <ReferenceLine y=0.003 label="2022 Low" hideValue=true color=negative lineType=dashed/>
@@ -282,7 +282,7 @@ This contradicts the common weekend-peak assumption and has direct ad-spend impl
     title="Conversion Rate by Day of Week"
     subtitle="Weekly rhythm of traffic-to-order capture"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.005 label="0.5% Target" hideValue=true color=positive lineType=dashed/>
 </BarChart>

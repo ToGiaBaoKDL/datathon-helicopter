@@ -146,7 +146,7 @@ a disproportionately high return rate — roughly double the Good/Excellent tier
     title="Average Return Rate by Rating Bucket"
     subtitle="Lower-rated products drive higher returns"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Category Quality Overview
@@ -174,7 +174,7 @@ logistics cost and reputation risk. Delisting or repricing these SKUs is high-RO
     title="Average Return Rate by Category"
     subtitle="Quality problems surface as returns"
     yAxisTitle="Return Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Review Volume Trend
@@ -216,7 +216,7 @@ However, the 17 Poor-rated products (bottom-left cluster) consistently show elev
 Focus attention on the bottom-right outliers: low rating + high return = immediate delist candidates.
 </Alert>
 
-<ScatterPlot
+<BubbleChart
     data={rating_vs_return}
     x=avg_rating
     y=return_unit_rate
@@ -227,11 +227,11 @@ Focus attention on the bottom-right outliers: low rating + high return = immedia
     xAxisTitle="Average Rating"
     yAxisTitle="Return Unit Rate"
     xFmt="0.0"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=warning/>
     <ReferenceArea xMin=0 xMax=3 yMin=0.05 label="Danger Zone" color=negative opacity=0.20 border=true/>
-</ScatterPlot>
+</BubbleChart>
 
 ## High-Risk Products
 

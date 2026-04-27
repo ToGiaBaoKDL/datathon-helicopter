@@ -247,13 +247,22 @@ select
 from ${conversion_by_dow}
 ```
 
+```sql conversion_calendar
+select
+    sales_date,
+    session_to_order_rate as conversion_rate
+from datathon_warehouse.mart_daily_executive_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+order by sales_date
+```
+
 ## Latest Snapshot
 
 <Alert status="info">
 Latest data as of <Value data={latest_snapshot} column=sales_date/>. 
 Revenue: <Value data={latest_snapshot} column=revenue fmt=num0/> VND | 
-Margin: <Value data={latest_snapshot} column=gross_margin_rate fmt=pct1/> | 
-Conversion: <Value data={latest_snapshot} column=session_to_order_rate fmt=pct1/>.
+Margin: <Value data={latest_snapshot} column=gross_margin_rate fmt=pct2/> | 
+Conversion: <Value data={latest_snapshot} column=session_to_order_rate fmt=pct2/>.
 </Alert>
 
 <DataTable data={latest_snapshot} rows=10 />
@@ -272,7 +281,7 @@ is the recovery opportunity.
     y=value
     series=metric
     title="Daily Revenue"
-    subtitle="Top-line revenue movement over time"
+    subtitle="Daily revenue with mean and peak reference lines"
     xAxisTitle="Date"
     yAxisTitle="Revenue"
     yFmt="num0"
@@ -327,10 +336,10 @@ This is the single biggest driver of revenue pressure despite flat traffic.
     y=value
     series=metric
     title="Margin, Conversion, and Return Rates"
-    subtitle="Key performance ratios on a comparable scale"
+    subtitle="Margin, conversion, and return rate trends over time"
     xAxisTitle="Date"
     yAxisTitle="Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.01 label="1% Benchmark" hideValue=true color=positive lineType=dashed/>
 </LineChart>
@@ -381,10 +390,19 @@ Reduce weekend ad spend if traffic does not convert.
     title="Average Session-to-Order Rate by Day of Week"
     subtitle="Wednesday peaks; weekend underperforms"
     yAxisTitle="Conversion Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine data={mean_conversion} y=mean_conversion label="Avg" hideValue=true color=info/>
 </BarChart>
+
+<CalendarHeatmap
+    data={conversion_calendar}
+    date=sales_date
+    value=conversion_rate
+    title="Daily Conversion Rate Calendar"
+    subtitle="Conversion intensity by day — spot outliers and structural drops"
+    valueFmt="pct2"
+/>
 
 ## Year-over-Year Trends
 
@@ -402,7 +420,7 @@ The conversion decline is the dominant driver — traffic (sessions) is flat but
     subtitle="Conversion, margin, and return rate over time"
     xAxisTitle="Year"
     yAxisTitle="Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.01 label="1% Benchmark" hideValue=true color=positive lineType=dashed/>
 </LineChart>
@@ -431,7 +449,7 @@ holding traffic and AOV constant. This is the #1 lever for revenue growth.
         data={what_if_conversion}
         value=pct_lift
         title="Revenue Lift"
-        fmt="pct1"
+        fmt="pct2"
     />
 </Grid>
 

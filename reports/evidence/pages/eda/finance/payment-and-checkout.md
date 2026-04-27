@@ -140,11 +140,12 @@ and purchase urgency (COD = hesitation or first-time buyer caution).
 </Alert>
 
 <Alert status="positive">
-Action: COD accounts for <Value data={cod_share} column=cod_order_share fmt=pct1/> of orders but cancels at <Value data={cod_share} column=cod_cancellation_rate fmt=pct1/> — roughly double the prepaid rate (<Value data={cod_share} column=prepaid_cancellation_rate fmt=pct1/>). 
+Action: COD accounts for <Value data={cod_share} column=cod_order_share fmt=pct2/> of orders but cancels at <Value data={cod_share} column=cod_cancellation_rate fmt=pct2/> — roughly double the prepaid rate (<Value data={cod_share} column=prepaid_cancellation_rate fmt=pct2/>). 
 Launch a "first-order discount for credit card" campaign to shift the mix toward lower-friction payment methods.
 </Alert>
 
 <BarChart
+    swapXY=true
     data={payment_summary}
     x=payment_method
     y=total_revenue
@@ -168,18 +169,19 @@ Launch a "first-order discount for credit card" campaign to shift the mix toward
 ## Checkout Friction: Cancellation by Payment
 
 <Alert status="warning">
-COD cancellation is the silent profit killer: <Value data={cod_share} column=cod_cancellation_rate fmt=pct1/> of COD orders are cancelled vs <Value data={cod_share} column=prepaid_cancellation_rate fmt=pct1/> for prepaid. 
+COD cancellation is the silent profit killer: <Value data={cod_share} column=cod_cancellation_rate fmt=pct2/> of COD orders are cancelled vs <Value data={cod_share} column=prepaid_cancellation_rate fmt=pct2/> for prepaid. 
 Every cancelled COD order incurs packing, logistics routing, and return costs with zero revenue.
 </Alert>
 
 <BarChart
+    swapXY=true
     data={payment_summary}
     x=payment_method
     y=avg_cancellation_rate
     title="Cancellation Rate by Payment Method"
     subtitle="COD and bank transfer show highest buyer remorse"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferencePoint data={cod_cancellation} x="cod" y=avg_cancellation_rate label="2x prepaid" labelPosition=top color=negative/>
 </BarChart>
@@ -192,7 +194,7 @@ Every cancelled COD order incurs packing, logistics routing, and return costs wi
     title="Daily Cancellation Rate by Payment"
     subtitle="Track payment-level checkout stability"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Instalment Impact on AOV
@@ -205,6 +207,7 @@ drive spend level — it simply removes friction for purchases shoppers already 
 </Alert>
 
 <BarChart
+    swapXY=true
     data={installment_impact}
     x=payment_method
     y=avg_aov
@@ -215,13 +218,14 @@ drive spend level — it simply removes friction for purchases shoppers already 
 />
 
 <BarChart
+    swapXY=true
     data={installment_impact}
     x=payment_method
     y=installment_share
     title="Instalment Share by Payment Method"
     subtitle="Which payment types support split payments"
     yAxisTitle="Share of Orders"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## COD vs Prepaid Comparison
@@ -233,6 +237,7 @@ High COD means high logistics cost, high return risk, and cash-flow drag
 </Alert>
 
 <BarChart
+    swapXY=true
     data={cod_vs_prepaid}
     x=payment_group
     y=total_revenue
@@ -243,13 +248,14 @@ High COD means high logistics cost, high return risk, and cash-flow drag
 />
 
 <BarChart
+    swapXY=true
     data={cod_vs_prepaid}
     x=payment_group
     y=avg_cancellation_rate
     title="Cancellation: COD vs Prepaid"
     subtitle="COD orders cancel at significantly higher rates"
     yAxisTitle="Cancellation Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Payment Method Detail

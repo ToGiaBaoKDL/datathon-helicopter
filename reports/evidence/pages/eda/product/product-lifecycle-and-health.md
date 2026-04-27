@@ -137,27 +137,42 @@ order by total_revenue desc
 limit 10
 ```
 
+```sql lifecycle_donut
+select
+    lifecycle_stage as name,
+    count(*) as value
+from datathon_warehouse.mart_product_lifetime_performance
+where category in ${inputs.category_filter.value}
+  and lifecycle_stage in ${inputs.stage_filter.value}
+group by 1
+```
+
 ## Lifecycle Distribution
 
 <Alert status="info">
-Lifecycle stages reveal portfolio vitality. "Active" products (sold within last 6 months) are the revenue engine. 
+Lifecycle stages reveal portfolio vitality. "Active" products (sold within last 6 months) are the revenue engine.
 "Dormant" and "discontinued" products tie up working capital and catalog complexity without generating sales.
 </Alert>
 
 <Alert status="warning">
-<Value data={negative_margin_count} column=negative_margin_products fmt=num0/> sold products have negative realized margin (COGS > net revenue after discounts), reflecting deep promotional discounting. 
+<Value data={negative_margin_count} column=negative_margin_products fmt=num0/> sold products have negative realized margin (COGS > net revenue after discounts), reflecting deep promotional discounting.
 These SKUs destroy value on every sale — consider delisting or repricing.
 </Alert>
 
-<BarChart
-    data={lifecycle_distribution}
-    x=lifecycle_stage
-    y=products
-    title="Product Count by Lifecycle Stage"
-    subtitle="Portfolio composition: active, dormant, discontinued, never_sold"
-    yAxisTitle="Products"
-    yFmt="num0"
-/>
+<ECharts config={
+    {
+        tooltip: {
+            formatter: '{b}: {c} ({d}%)'
+        },
+        series: [
+            {
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: [...lifecycle_donut],
+            }
+        ]
+    }
+}/>
 
 <BarChart
     data={lifecycle_distribution}
@@ -191,6 +206,7 @@ Margin rate varies significantly by category, revealing where pricing power is s
     data={category_pareto}
     x=category
     y=total_revenue
+    swapXY=true
     title="Lifetime Revenue by Category"
     subtitle="Category contribution to total sold-product revenue"
     yAxisTitle="Revenue"
@@ -201,10 +217,11 @@ Margin rate varies significantly by category, revealing where pricing power is s
     data={category_pareto}
     x=category
     y=avg_margin_rate
+    swapXY=true
     title="Average Realized Margin by Category"
     subtitle="Post-discount margin performance"
     yAxisTitle="Margin Rate"
-    yFmt="0.0%"
+    yFmt="pct2"
 />
 
 ## Monthly Health Trend
@@ -222,7 +239,7 @@ in product quality, sizing, or fulfillment damage. Stockout count above 100 prod
     subtitle="Quality trend across the product portfolio"
     yAxisTitle="Return Rate"
     xAxisTitle="Month"
-    yFmt="0.0%"
+    yFmt="pct2"
 >
     <ReferenceLine y=0.05 label="5% Quality Threshold" hideValue=true color=negative/>
 </LineChart>
