@@ -2,7 +2,7 @@ UV ?= uv
 DBT_PROJECT_DIR ?= dbt
 DBT_PROFILES_DIR ?= dbt
 
-.PHONY: install download-data build-raw dbt-build dbt-test evidence-install evidence-sources evidence-dev evidence-build evidence-deploy evidence-deploy-cf test lint
+.PHONY: install download-data build-raw dbt-build dbt-test evidence-install evidence-sources evidence-dev evidence-build evidence-deploy evidence-deploy-vercel test lint
 
 install:
 	$(UV) sync --extra dev
@@ -34,8 +34,8 @@ evidence-build:
 evidence-deploy:
 	cd reports/evidence && npx netlify deploy --prod --dir=build
 
-evidence-deploy-cf:
-	cd reports/evidence && npx wrangler pages deploy build --project-name=datathon-helicopter --branch=main
+evidence-deploy-vercel:
+	cd reports/evidence && npx vercel@latest deploy build --prod --yes
 
 test:
 	$(UV) run pytest -q

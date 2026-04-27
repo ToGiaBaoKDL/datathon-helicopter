@@ -492,9 +492,9 @@ Replaced ad-hoc `scripts/` with modular `audit/` package:
 ### 32. README Cleanup
 Rewrote `README.md` to be concise (reproduce, install, structure, commands) while moving session history detail to `AGENTS.md`.
 
-### 33. CI/CD — Multi-Platform Deploy (Netlify + Cloudflare Pages)
+### 33. CI/CD — Multi-Platform Deploy (Netlify + Vercel)
 - Workflow: `.github/workflows/deploy-evidence.yml`
-- Platforms: **Netlify** (primary) + **Cloudflare Pages** (backup/mirror)
+- Platforms: **Netlify** (primary) + **Vercel** (backup/mirror)
 - Node.js: **22** (LTS)
 - Opt-in Node 24 early: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`
 - Kaggle data: downloaded fresh on cache miss (`actions/cache@v4` on `data/raw`)
@@ -505,15 +505,16 @@ Rewrote `README.md` to be concise (reproduce, install, structure, commands) whil
 |--------|----------|---------|
 | `NETLIFY_AUTH_TOKEN` | Netlify | CLI deploy authentication |
 | `NETLIFY_SITE_ID` | Netlify | Target site identifier |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare | Wrangler CLI authentication |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Account identifier |
+| `VERCEL_TOKEN` | Vercel | CLI deploy authentication |
+| `VERCEL_ORG_ID` | Vercel | Team / user identifier |
+| `VERCEL_PROJECT_ID` | Vercel | Project identifier |
 | `KAGGLE_API_TOKEN` | — | Kaggle data download |
 
 **Deploy behavior:**
 - Build runs **once** (Python + dbt + Evidence)
 - Netlify deploy runs first (primary)
-- Cloudflare deploy runs second (backup)
-- Both deploys use `continue-on-error: true` — if Netlify is down, Cloudflare still deploys
+- Vercel deploy runs second (backup)
+- Both deploys use `continue-on-error: true` — if Netlify is down, Vercel still deploys
 - Job fails **only** if **both** deploys fail
 
 **Commit prefixes that trigger deploy:**
@@ -530,8 +531,8 @@ Manual trigger via `workflow_dispatch` always deploys to both platforms.
 
 **Local deploy targets:**
 ```bash
-make evidence-deploy      # Netlify only
-make evidence-deploy-cf   # Cloudflare Pages only
+make evidence-deploy         # Netlify only
+make evidence-deploy-vercel  # Vercel only
 ```
 
 ## Quick Commands

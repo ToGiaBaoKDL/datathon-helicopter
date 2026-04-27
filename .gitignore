@@ -58,5 +58,6 @@ dist/
 build/
 reports/evidence/build/
 
-# Local Netlify folder
+# Local deploy folders
 .netlify
+.vercel
