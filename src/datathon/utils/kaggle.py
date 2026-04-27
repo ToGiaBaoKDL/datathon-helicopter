@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 
 from dotenv import load_dotenv
 
@@ -25,6 +26,19 @@ def ensure_kaggle_cli_and_auth() -> None:
 
     os.environ.setdefault("KAGGLE_USERNAME", username or "")
     os.environ.setdefault("KAGGLE_KEY", key)
+
+
+def validate_competition_access(competition: str) -> None:
+    subprocess.run(
+        [
+            "kaggle",
+            "competitions",
+            "files",
+            "-q",
+            competition,
+        ],
+        check=True,
+    )
 
 
 def _parse_token(token: str) -> tuple[str | None, str]:
