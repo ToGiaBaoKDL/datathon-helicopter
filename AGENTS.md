@@ -518,7 +518,7 @@ Rewrote `README.md` to be concise (reproduce, install, structure, commands) whil
 
 **Commit prefixes that trigger deploy:**
 ```
-deploy:, ci:, feat:, fix:
+deploy:, evidence:, ci:, feat:, fix:
 ```
 Other prefixes (`docs:`, `test:`, `chore:`, `refactor:`, ...) do **not** trigger deploy.
 Manual trigger via `workflow_dispatch` always deploys to both platforms.

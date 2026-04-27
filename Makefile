@@ -35,7 +35,7 @@ evidence-deploy:
 	cd reports/evidence && npx netlify deploy --prod --dir=build
 
 evidence-deploy-cf:
-	cd reports/evidence && npx wrangler pages deploy build --project-name=datathon-evidence --branch=main
+	cd reports/evidence && npx wrangler pages deploy build --project-name=datathon-helicopter --branch=main
 
 test:
 	$(UV) run pytest -q

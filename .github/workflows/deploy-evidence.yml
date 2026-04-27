@@ -108,7 +108,7 @@ jobs:
       - name: Deploy to Cloudflare Pages
         id: deploy-cf
         continue-on-error: true
-        run: npx wrangler@latest pages deploy reports/evidence/build --project-name=datathon-evidence --branch=main --commit-dirty=true
+        run: npx wrangler@latest pages deploy reports/evidence/build --project-name=datathon-helicopter --branch=main --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
