@@ -13,20 +13,20 @@ when fixed discounts deliver <b><Value data={roi_ratio} column=ratio fmt=0.0x/> 
 select
     promo_type,
     count(*) as campaigns,
-    round(sum(total_net_revenue)/1e9, 2) as revenue_b,
+    round(sum(total_net_revenue), 0) as total_revenue,
     round(avg(discount_rate), 4) as avg_discount_rate,
     round(sum(total_net_revenue) / nullif(sum(total_discount_amount), 0), 1) as roi,
     sum(total_orders) as total_orders
 from datathon_warehouse.mart_promotion_effectiveness
 where total_orders > 0
 group by 1
-order by revenue_b desc
+order by total_revenue desc
 ```
 
 ```sql fixed_stats
 select
     count(*) as campaigns,
-    round(sum(total_net_revenue)/1e9, 2) as revenue_b,
+    round(sum(total_net_revenue), 0) as total_revenue,
     round(avg(discount_rate), 4) as avg_discount_rate,
     round(sum(total_net_revenue) / nullif(sum(total_discount_amount), 0), 1) as roi
 from datathon_warehouse.mart_promotion_effectiveness
@@ -36,7 +36,7 @@ where total_orders > 0 and promo_type = 'fixed'
 ```sql pct_stats
 select
     count(*) as campaigns,
-    round(sum(total_net_revenue)/1e9, 2) as revenue_b,
+    round(sum(total_net_revenue), 0) as total_revenue,
     round(avg(discount_rate), 4) as avg_discount_rate,
     round(sum(total_net_revenue) / nullif(sum(total_discount_amount), 0), 1) as roi
 from datathon_warehouse.mart_promotion_effectiveness
@@ -95,9 +95,9 @@ order by total_revenue desc
 ## 1. The Trade-off: Scale vs Efficiency
 
 <Alert status="info">
-Percentage: <Value data={pct_stats} column=campaigns fmt=0/> campaigns, <Value data={pct_stats} column=revenue_b fmt=0.0/>B revenue, 
-<Value data={pct_stats} column=avg_discount_rate fmt=pct2/> discount, <Value data={pct_stats} column=roi fmt=0.0x/> ROI. 
-Fixed: <Value data={fixed_stats} column=campaigns fmt=0/> campaigns, <Value data={fixed_stats} column=revenue_b fmt=0.0/>B revenue, 
+Percentage: <Value data={pct_stats} column=campaigns fmt=0/> campaigns, <Value data={pct_stats} column=total_revenue fmt=num0/> VND revenue,
+<Value data={pct_stats} column=avg_discount_rate fmt=pct2/> discount, <Value data={pct_stats} column=roi fmt=0.0x/> ROI.
+Fixed: <Value data={fixed_stats} column=campaigns fmt=0/> campaigns, <Value data={fixed_stats} column=total_revenue fmt=num0/> VND revenue,
 <Value data={fixed_stats} column=avg_discount_rate fmt=pct2/> discount, <Value data={fixed_stats} column=roi fmt=0.0x/> ROI. 
 The business chooses scale over efficiency.
 </Alert>
@@ -105,11 +105,11 @@ The business chooses scale over efficiency.
 <BarChart
     data={promo_summary}
     x=promo_type
-    y=revenue_b
+    y=total_revenue
     title="Revenue by Promotion Type"
-    subtitle="Percentage: 45 campaigns, 5.1B VND vs Fixed: 5 campaigns, 0.4B VND"
-    yAxisTitle="Revenue (Billions VND)"
-    yFmt="0.0"
+    subtitle="Percentage drives far more absolute revenue than fixed"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
 />
 
 <BarChart
@@ -117,7 +117,7 @@ The business chooses scale over efficiency.
     x=promo_type
     y=avg_discount_rate
     title="Average Discount Rate by Type"
-    subtitle="Fixed: 1.2% avg discount vs 12.9% for percentage"
+    subtitle="Fixed discounts run far shallower than percentage"
     yAxisTitle="Discount Rate"
     yFmt="pct2"
 />

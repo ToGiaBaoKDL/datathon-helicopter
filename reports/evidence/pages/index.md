@@ -48,6 +48,8 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [The COD Tax](./eda/stories/10-cod-tax)
 - [The Seasonality Paradox](./eda/stories/11-seasonality-paradox)
 - [The Portfolio Drift](./eda/stories/12-portfolio-drift)
+- [The Risk Flag Convergence](./eda/stories/13-risk-flag-convergence)
+- [The Mobile Conversion Gap](./eda/stories/14-mobile-conversion-gap)
 
 ### Appendix
 - [Analytical Questions & Findings](./eda/appendix/analytical-questions)

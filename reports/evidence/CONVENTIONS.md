@@ -46,6 +46,22 @@
 ## DataTable
 - Always set rows=10 explicitly on <DataTable>.
 
+## No Display Formatting in SQL
+- SQL must return raw business values. Do NOT divide or multiply for display purposes.
+  - Bad:  round(sum(revenue)/1e9, 2) as revenue_b  -- display formatting
+  - Bad:  select revenue_share * 0.01 as pct        -- business math in SQL
+  - Good: round(sum(revenue), 0) as total_revenue   -- raw value
+  - Good: select revenue_share as pct               -- raw ratio
+- Let Evidence fmt handle display: fmt=num0 for large numbers, fmt=pct2 for ratios.
+- Exception: legitimate unit conversions (days / 365.0 → years) and business scenarios (10% shift, 2pp lift) are OK.
+
+## Weighted Averages — No avg(avg_*)
+- Do NOT compute avg() of an already-averaged column. It produces an unweighted average.
+  - Bad:  avg(avg_shipping_fee), avg(avg_order_value), avg(avg_daily_revenue)
+  - Good: sum(total_shipping_fee)::double / sum(shipped_order_count)
+  - Good: sum(revenue)::double / sum(order_count)
+  - Good: sum(total_net_revenue)::double / sum(total_orders)
+
 ## General
 - title = Noun phrase (metric + dimension)
 - subtitle = Short insight with a data point (max 12 words)

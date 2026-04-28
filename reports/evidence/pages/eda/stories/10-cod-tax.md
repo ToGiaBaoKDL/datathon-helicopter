@@ -14,8 +14,8 @@ select
     payment_method,
     sum(order_count) as total_orders,
     sum(revenue) as total_revenue,
-    round(avg(cancellation_rate), 4) as avg_cancellation_rate,
-    round(avg(avg_order_value), 0) as avg_order_value
+    round(sum(cancelled_lines)::double / nullif(sum(order_line_count), 0), 4) as avg_cancellation_rate,
+    round(sum(revenue)::double / sum(order_count), 0) as avg_order_value
 from datathon_warehouse.mart_daily_payment_checkout_kpis
 where payment_method != 'unknown'
 group by 1
@@ -30,8 +30,8 @@ select
     end as payment_group,
     sum(order_count) as total_orders,
     sum(revenue) as total_revenue,
-    round(avg(cancellation_rate), 4) as avg_cancellation_rate,
-    round(avg(avg_order_value), 0) as avg_order_value
+    round(sum(cancelled_lines)::double / nullif(sum(order_line_count), 0), 4) as avg_cancellation_rate,
+    round(sum(revenue)::double / sum(order_count), 0) as avg_order_value
 from datathon_warehouse.mart_daily_payment_checkout_kpis
 where payment_method != 'unknown'
 group by 1
@@ -39,13 +39,13 @@ order by total_orders desc
 ```
 
 ```sql cod_rate
-select round(avg(cancellation_rate), 4) as cod_cancel_rate
+select round(sum(cancelled_lines)::double / nullif(sum(order_line_count), 0), 4) as cod_cancel_rate
 from datathon_warehouse.mart_daily_payment_checkout_kpis
 where payment_method = 'cod'
 ```
 
 ```sql prepaid_rate
-select round(avg(cancellation_rate), 4) as prepaid_cancel_rate
+select round(sum(cancelled_lines)::double / nullif(sum(order_line_count), 0), 4) as prepaid_cancel_rate
 from datathon_warehouse.mart_daily_payment_checkout_kpis
 where payment_method != 'cod' and payment_method != 'unknown'
 ```
@@ -68,8 +68,8 @@ where payment_method != 'unknown'
 ```sql cod_cancel_ratio
 select
     round(
-        (select avg(cancellation_rate) from datathon_warehouse.mart_daily_payment_checkout_kpis where payment_method = 'cod')
-        / nullif((select avg(cancellation_rate) from datathon_warehouse.mart_daily_payment_checkout_kpis where payment_method != 'cod' and payment_method != 'unknown'), 0),
+        (select sum(cancelled_lines)::double / nullif(sum(order_line_count), 0) from datathon_warehouse.mart_daily_payment_checkout_kpis where payment_method = 'cod')
+        / nullif((select sum(cancelled_lines)::double / nullif(sum(order_line_count), 0) from datathon_warehouse.mart_daily_payment_checkout_kpis where payment_method != 'cod' and payment_method != 'unknown'), 0),
         1
     ) as ratio
 ```
@@ -78,7 +78,7 @@ select
 select
     sales_date,
     case when payment_method = 'cod' then 'COD' else 'Prepaid' end as payment_group,
-    round(avg(cancellation_rate), 4) as cancellation_rate
+    round(sum(cancelled_lines)::double / nullif(sum(order_line_count), 0), 4) as cancellation_rate
 from datathon_warehouse.mart_daily_payment_checkout_kpis
 where payment_method != 'unknown'
 group by 1, 2

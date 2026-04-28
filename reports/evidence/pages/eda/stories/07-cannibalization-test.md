@@ -12,8 +12,8 @@ What happens to revenue <b>before, during, and after</b> campaigns?
 ```sql aggregate_windows
 select
     period_type,
-    round(avg(avg_daily_revenue), 0) as avg_daily_revenue,
-    round(avg(avg_daily_orders), 0) as avg_daily_orders,
+    round(sum(avg_daily_revenue * days_in_period)::double / sum(days_in_period), 0) as avg_daily_revenue,
+    round(sum(avg_daily_orders * days_in_period)::double / sum(days_in_period), 0) as avg_daily_orders,
     count(distinct promo_id) as promo_count
 from datathon_warehouse.mart_promo_cannibalization
 group by 1
@@ -24,8 +24,8 @@ order by case period_type when 'pre' then 1 when 'during' then 2 when 'post' the
 select
     promo_type,
     period_type,
-    round(avg(avg_daily_revenue), 0) as avg_daily_revenue,
-    round(avg(avg_daily_orders), 0) as avg_daily_orders
+    round(sum(avg_daily_revenue * days_in_period)::double / sum(days_in_period), 0) as avg_daily_revenue,
+    round(sum(avg_daily_orders * days_in_period)::double / sum(days_in_period), 0) as avg_daily_orders
 from datathon_warehouse.mart_promo_cannibalization
 group by 1, 2
 order by promo_type, case period_type when 'pre' then 1 when 'during' then 2 when 'post' then 3 end
@@ -34,7 +34,7 @@ order by promo_type, case period_type when 'pre' then 1 when 'during' then 2 whe
 ```sql fixed_promo_impact
 select
     period_type,
-    round(avg(avg_daily_revenue), 0) as avg_daily_revenue
+    round(sum(avg_daily_revenue * days_in_period)::double / sum(days_in_period), 0) as avg_daily_revenue
 from datathon_warehouse.mart_promo_cannibalization
 where promo_type = 'fixed'
 group by 1
@@ -44,7 +44,7 @@ order by case period_type when 'pre' then 1 when 'during' then 2 when 'post' the
 ```sql pct_promo_impact
 select
     period_type,
-    round(avg(avg_daily_revenue), 0) as avg_daily_revenue
+    round(sum(avg_daily_revenue * days_in_period)::double / sum(days_in_period), 0) as avg_daily_revenue
 from datathon_warehouse.mart_promo_cannibalization
 where promo_type = 'percentage'
 group by 1

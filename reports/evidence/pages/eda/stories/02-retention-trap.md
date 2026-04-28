@@ -64,11 +64,20 @@ order by worst_m1 asc
 limit 1
 ```
 
+```sql channel_stats
+select
+    acquisition_channel,
+    round(avg(case when months_since_first_order = 1 then retention_rate end), 4) as m1_retention
+from datathon_warehouse.mart_cohort_by_channel_age
+group by 1
+order by m1_retention desc
+```
+
 ```sql channel_ratio
 select
     round(
-        (select avg(case when months_since_first_order = 1 then retention_rate end) from datathon_warehouse.mart_cohort_by_channel_age where acquisition_channel = (select acquisition_channel from datathon_warehouse.mart_cohort_by_channel_age group by 1 order by avg(case when months_since_first_order = 1 then retention_rate end) desc limit 1))
-        / nullif((select avg(case when months_since_first_order = 1 then retention_rate end) from datathon_warehouse.mart_cohort_by_channel_age where acquisition_channel = (select acquisition_channel from datathon_warehouse.mart_cohort_by_channel_age group by 1 order by avg(case when months_since_first_order = 1 then retention_rate end) asc limit 1)), 0),
+        (select max(m1_retention) from ${channel_stats})
+        / nullif((select min(m1_retention) from ${channel_stats}), 0),
         1
     ) as ratio
 ```
@@ -82,51 +91,7 @@ group by 1
 order by m1_retention desc
 ```
 
-```sql clv_tiers
-with ranked as (
-    select
-        customer_id,
-        total_revenue,
-        ntile(4) over (order by total_revenue) as revenue_quartile
-    from datathon_warehouse.mart_customer_rfm
-),
-total as (
-    select sum(total_revenue) as all_revenue from ranked
-)
-select
-    case
-        when r.revenue_quartile = 4 then 'Platinum'
-        when r.revenue_quartile = 3 then 'Gold'
-        when r.revenue_quartile = 2 then 'Silver'
-        else 'Bronze'
-    end as clv_tier,
-    count(*) as customers,
-    round(avg(r.total_revenue), 0) as avg_ltv,
-    sum(r.total_revenue) as tier_revenue,
-    round(sum(r.total_revenue) / t.all_revenue, 4) as revenue_share
-from ranked r
- cross join total t
-group by r.revenue_quartile, t.all_revenue
-order by r.revenue_quartile desc
-```
 
-```sql platinum_revenue
-select round(sum(total_revenue) / sum(sum(total_revenue)) over (), 4) as revenue_pct
-from (
-    select total_revenue, ntile(4) over (order by total_revenue) as q
-    from datathon_warehouse.mart_customer_rfm
-) t
-where q = 4
-```
-
-```sql bronze_revenue
-select round(sum(total_revenue) / sum(sum(total_revenue)) over (), 4) as revenue_pct
-from (
-    select total_revenue, ntile(4) over (order by total_revenue) as q
-    from datathon_warehouse.mart_customer_rfm
-) t
-where q = 1
-```
 
 ## 1. The Funnel: One and Done
 
@@ -163,7 +128,7 @@ The entire retention problem is the <b>first 30 days</b> — after that, survivo
     x=months_since_first_order
     y=avg_retention
     title="Retention Curve: Month 0 to Month 12"
-    subtitle="Retention drops to ~3.5% by month 1 then flatlines"
+    subtitle="Retention cliff after month 1 then stagnation"
     yAxisTitle="Retention Rate"
     xAxisTitle="Months Since First Order"
     yFmt="pct2"
@@ -203,25 +168,6 @@ Intent quality, not volume, drives repeat purchase.
     title="Month-1 Retention by Age Group"
     subtitle="55+ customers are most loyal, but 25–34 (the largest segment) is the weakest"
     yAxisTitle="Retention Rate"
-    yFmt="pct2"
-/>
-
-## 5. Value at Risk: Pareto in Full Force
-
-<Alert status="info">
-Platinum (top 25%) generates <Value data={platinum_revenue} column=revenue_pct fmt=pct2/> of revenue. 
-Bronze (bottom 25%) contributes <Value data={bronze_revenue} column=revenue_pct fmt=pct2/>. 
-Platinum + Gold = ~90% of revenue from 50% of customers.
-</Alert>
-
-<BarChart
-    data={clv_tiers}
-    x=clv_tier
-    y=revenue_share
-    swapXY=true
-    title="Revenue Share by CLV Tier"
-    subtitle="Platinum + Gold = ~90% of revenue from 50% of customers"
-    yAxisTitle="Revenue Share"
     yFmt="pct2"
 />
 

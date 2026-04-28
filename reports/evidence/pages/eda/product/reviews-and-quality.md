@@ -104,6 +104,14 @@ where review_count >= 5
 order by return_unit_rate desc
 ```
 
+```sql poor_rated_count
+select count(*) as poor_products
+from datathon_warehouse.mart_product_reviews_summary
+where review_count >= 5
+  and avg_rating < 3.0
+  and category in ${inputs.cat_filter.value}
+```
+
 ```sql no_reviews
 select
     category,
@@ -212,7 +220,7 @@ or fewer customers leaving feedback, which is a warning sign for engagement.
 <Alert status="info">
 Each dot is a product. The overall correlation between rating and return rate is weak, 
 because most products cluster in the Good/Excellent range with similar return profiles. 
-However, the 17 Poor-rated products (bottom-left cluster) consistently show elevated returns. 
+However, the <Value data={poor_rated_count} column=poor_products fmt=0/> Poor-rated products (bottom-left cluster) consistently show elevated returns. 
 Focus attention on the bottom-right outliers: low rating + high return = immediate delist candidates.
 </Alert>
 

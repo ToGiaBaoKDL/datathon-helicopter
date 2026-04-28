@@ -44,6 +44,23 @@ from datathon_warehouse.mart_region_category_revenue
 order by region, revenue desc
 ```
 
+```sql region_category_share
+select
+    region,
+    category,
+    round(revenue::double / sum(revenue) over (partition by region), 4) as share
+from datathon_warehouse.mart_region_category_revenue
+order by region, share desc
+```
+
+```sql region_aov
+select
+    region,
+    round(total_revenue::double / total_orders, 0) as aov
+from datathon_warehouse.mart_region_fulfillment_profile
+order by aov desc
+```
+
 ```sql region_return_rank
 select
     region,
@@ -83,7 +100,7 @@ This rules out logistics cost as the cause of West's underperformance. The issue
     x=region
     y=avg_shipping_fee
     title="Average Shipping Fee by Region"
-    subtitle="Uniform ~5 VND — no regional cost advantage"
+    subtitle="Shipping cost is uniform across all regions"
     yAxisTitle="Shipping Fee (VND)"
     yFmt="0.00"
 />
@@ -93,7 +110,7 @@ This rules out logistics cost as the cause of West's underperformance. The issue
     x=region
     y=avg_days_to_deliver
     title="Average Days to Deliver by Region"
-    subtitle="All regions near ~6 days — uniform SLA"
+    subtitle="Delivery speed is consistent across all regions"
     yAxisTitle="Days"
     yFmt="0.0"
 >
@@ -122,18 +139,29 @@ East and Central are lower. Since logistics are uniform, the cause is likely pro
 ## 4. Category Mix: What Each Region Buys
 
 <Alert status="info">
-The heatmap below reveals whether West skews toward high-return categories. 
+The charts below reveal whether West skews toward high-return categories or has a different purchasing pattern.
 If West over-indexes on a category with historically high returns, that explains the puzzle.
 </Alert>
 
-<Heatmap
-    data={region_category_matrix}
+<BarChart
+    data={region_category_share}
     x=category
-    y=region
-    value=revenue
-    title="Revenue Mix: Region × Category"
-    subtitle="Darker = higher revenue. Reveals category preference by region"
-    valueFmt="num0"
+    y=share
+    series=region
+    title="Category Share by Region"
+    subtitle="Does West over-index on any high-return category?"
+    yAxisTitle="Share of Region Revenue"
+    yFmt="pct2"
+/>
+
+<BarChart
+    data={region_aov}
+    x=region
+    y=aov
+    title="Average Order Value by Region"
+    subtitle="Lower AOV can indicate trial buying behavior"
+    yAxisTitle="AOV (VND)"
+    yFmt="num0"
 />
 
 ## The Verdict

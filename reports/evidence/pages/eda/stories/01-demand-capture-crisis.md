@@ -66,7 +66,7 @@ select
     round(avg(sessions) * (select peak_conversion from ${peak_year}), 0) as projected_orders,
     round(avg(sessions) * (select peak_conversion from ${peak_year}) * (avg(revenue)::double / nullif(avg(order_count), 0)), 0) as projected_revenue,
     round(avg(sessions) * (select peak_conversion from ${peak_year}) * (avg(revenue)::double / nullif(avg(order_count), 0)) - avg(revenue), 0) as delta_revenue,
-    round((avg(sessions) * (select peak_conversion from ${peak_year}) * (avg(revenue)::double / nullif(avg(order_count), 0)) - avg(revenue)) * 365 / 1e9, 2) as annual_delta_b
+    round((avg(sessions) * (select peak_conversion from ${peak_year}) * (avg(revenue)::double / nullif(avg(order_count), 0)) - avg(revenue)) * 365, 0) as annual_delta
 from datathon_warehouse.mart_daily_executive_kpis
 where date_part('year', sales_date) = 2022
 ```
@@ -129,7 +129,7 @@ Between 2018 and 2019, conversion dropped sharply in a single year. Something st
 At 2022 traffic levels, restoring peak conversion would generate 
 <Value data={what_if_scenario} column=projected_revenue fmt=num0/> VND/day vs current <Value data={what_if_scenario} column=current_revenue fmt=num0/> VND/day. 
 That is <Value data={what_if_scenario} column=delta_revenue fmt=num0/> VND/day left on the table — 
-or <Value data={what_if_scenario} column=annual_delta_b fmt=num0/>B VND annually.
+or <Value data={what_if_scenario} column=annual_delta fmt=num0/> VND annually.
 </Alert>
 
 <Grid cols=3>
@@ -160,7 +160,7 @@ or <Value data={what_if_scenario} column=annual_delta_b fmt=num0/>B VND annually
     x=sales_date
     y=sessions
     title="Daily Sessions (Traffic)"
-    subtitle="Traffic grew 63% — demand generation is not the problem"
+    subtitle="Sessions trend upward while orders decline"
     yAxisTitle="Sessions"
     yFmt="0"
 />
@@ -170,7 +170,7 @@ or <Value data={what_if_scenario} column=annual_delta_b fmt=num0/>B VND annually
     x=sales_date
     y=order_count
     title="Daily Orders"
-    subtitle="Orders fell 54% — the funnel is broken"
+    subtitle="Order volume collapses despite growing traffic"
     yAxisTitle="Orders"
     yFmt="0"
 />
@@ -181,5 +181,5 @@ or <Value data={what_if_scenario} column=annual_delta_b fmt=num0/>B VND annually
 <b>Action:</b> This is a demand <b>capture</b> crisis, not a demand <b>generation</b> crisis. 
 Traffic is at an all-time high. Conversion is at an all-time low. 
 Audit mobile UX, page load speed, payment coverage, and checkout flow friction. 
-Restoring 2013-level conversion at current traffic would add <Value data={what_if_scenario} column=annual_delta_b fmt=num0/>B VND annually.
+Restoring 2013-level conversion at current traffic would add <Value data={what_if_scenario} column=annual_delta fmt=num0/> VND annually.
 </Alert>

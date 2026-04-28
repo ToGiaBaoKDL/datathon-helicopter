@@ -14,9 +14,9 @@ Is the portfolio drifting toward low-margin volume?
 select
     category,
     round(sum(gross_revenue), 0) as total_revenue,
-    round(avg(gross_margin_rate), 4) as avg_margin_rate,
+    round(sum(gross_profit)::double / nullif(sum(gross_revenue), 0), 4) as avg_margin_rate,
     round(sum(gross_profit), 0) as total_gross_profit,
-    round(avg(return_unit_rate), 4) as avg_return_rate,
+    round(sum(return_units)::double / nullif(sum(sold_units), 0), 4) as avg_return_rate,
     sum(order_count) as total_orders
 from datathon_warehouse.mart_monthly_category_performance
 group by 1
@@ -26,7 +26,7 @@ order by total_revenue desc
 ```sql streetwear_stats
 select
     round(sum(gross_revenue), 0) as total_revenue,
-    round(avg(gross_margin_rate), 4) as avg_margin_rate
+    round(sum(gross_profit)::double / nullif(sum(gross_revenue), 0), 4) as avg_margin_rate
 from datathon_warehouse.mart_monthly_category_performance
 where category = 'Streetwear'
 ```
@@ -34,7 +34,7 @@ where category = 'Streetwear'
 ```sql genz_stats
 select
     round(sum(gross_revenue), 0) as total_revenue,
-    round(avg(gross_margin_rate), 4) as avg_margin_rate
+    round(sum(gross_profit)::double / nullif(sum(gross_revenue), 0), 4) as avg_margin_rate
 from datathon_warehouse.mart_monthly_category_performance
 where category = 'GenZ'
 ```
@@ -64,6 +64,15 @@ select
     round(sum(gross_revenue) * 0.02, 0) as two_point_lift
 from datathon_warehouse.mart_monthly_category_performance
 where category = 'Streetwear'
+```
+
+```sql category_share_trend
+select
+    month_start_date,
+    category,
+    round(gross_revenue::double / sum(gross_revenue) over (partition by month_start_date), 4) as revenue_share
+from datathon_warehouse.mart_monthly_category_performance
+order by month_start_date, category
 ```
 
 ## 1. Category Revenue: Streetwear Dominates
@@ -120,6 +129,17 @@ Monthly revenue by category shows whether Streetwear is pulling further ahead or
     yFmt="num0"
 />
 
+<AreaChart
+    data={category_share_trend}
+    x=month_start_date
+    y=revenue_share
+    series=category
+    title="Revenue Share by Category Over Time"
+    subtitle="Portfolio drift: is Streetwear share growing while GenZ shrinks?"
+    yAxisTitle="Share of Total Revenue"
+    yFmt="pct2"
+/>
+
 ## 4. Margin Trajectory: Is Streetwear Recovering?
 
 <Alert status="info">
@@ -132,7 +152,7 @@ Even if Streetwear revenue grows, margin trajectory matters. A flat or declining
     y=gross_margin_rate
     series=category
     title="Monthly Gross Margin Rate by Category"
-    subtitle="Monthly margin by category — all segments trail the 15% target"
+    subtitle="All categories fall short of the margin target"
     yAxisTitle="Margin Rate"
     yFmt="pct2"
 >

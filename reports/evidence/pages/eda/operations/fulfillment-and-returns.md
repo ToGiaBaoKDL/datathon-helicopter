@@ -42,12 +42,10 @@ order by sales_date
 
 ```sql latest_fulfillment
 select
-    free_shipping_share,
-    avg_shipping_fee
+    sum(free_shipping_order_count)::double / sum(shipped_order_count) as free_shipping_share,
+    sum(total_shipping_fee)::double / sum(shipped_order_count) as avg_shipping_fee
 from datathon_warehouse.mart_daily_fulfillment_kpis
-where sales_date <= '${inputs.date_range.end}'
-order by sales_date desc
-limit 1
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 ```
 
 ```sql returns_long

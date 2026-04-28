@@ -51,21 +51,12 @@ order by 1
 
 ```sql day_of_week_pattern
 select
-    dayofweek(sales_date) as dow,
-    case dayofweek(sales_date)
-        when 0 then 'Sun'
-        when 1 then 'Mon'
-        when 2 then 'Tue'
-        when 3 then 'Wed'
-        when 4 then 'Thu'
-        when 5 then 'Fri'
-        when 6 then 'Sat'
-    end as day_name,
+    strftime(sales_date, '%a') as day_name,
     round(avg(revenue), 0) as avg_revenue,
     round(avg(order_count), 0) as avg_orders
 from datathon_warehouse.mart_forecast_daily_base
-group by 1, 2
-order by 1
+group by 1
+order by case day_name when 'Mon' then 1 when 'Tue' then 2 when 'Wed' then 3 when 'Thu' then 4 when 'Fri' then 5 when 'Sat' then 6 when 'Sun' then 7 end
 ```
 
 ```sql month_end_effect

@@ -242,6 +242,8 @@ from ${clv_tiers}
 where clv_tier = 'Bronze'
 ```
 
+
+
 ## Latest Cohort Snapshot
 
 <Alert status="info">
@@ -326,7 +328,7 @@ Platinum + Gold together = ~90% of revenue — a classic Pareto distribution.
 </Alert>
 
 <Alert status="positive">
-Action: Prioritize retention for Platinum and Gold. Losing 1% of Platinum customers = losing ~0.7% of total revenue.
+Action: Prioritize retention for Platinum and Gold. Platinum generates <Value data={platinum_share} column=pct fmt=pct2/> of total revenue — losing 1% of Platinum customers means losing roughly 1% of that share.
 </Alert>
 
 <ECharts config={

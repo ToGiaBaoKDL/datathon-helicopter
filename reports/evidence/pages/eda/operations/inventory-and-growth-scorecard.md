@@ -126,6 +126,15 @@ where sales_date >= date_trunc('month', cast('${inputs.date_range.start}' as dat
   and sales_date <= cast('${inputs.date_range.end}' as date)
 ```
 
+```sql conversion_lift
+select
+    avg(session_to_order_rate) as current_conversion,
+    (avg(session_to_order_rate) + 0.01) / nullif(avg(session_to_order_rate), 0) - 1 as lift_pct
+from datathon_warehouse.mart_daily_marketing_kpis
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+  and sessions > 0
+```
+
 ## Inventory Health Overview
 
 <Alert status="warning">
@@ -136,7 +145,7 @@ This is a bigger problem than stockouts.
 
 <Alert status="positive">
 Action: Target 90 days of supply (industry standard). A reduction to 90 days would free 
-~80% of inventory capital for reinvestment in marketing or product development.
+~90% of inventory capital for reinvestment in marketing or product development.
 </Alert>
 
 <Grid cols=4>
@@ -251,7 +260,7 @@ This is the dominant driver of revenue pressure. Traffic is flat; capture is bro
 
 <Alert status="positive">
 Action: Audit checkout flow, page load speed, mobile UX, and payment coverage. 
-A +1pp conversion lift would project ~150% incremental revenue.
+A +1pp conversion lift would project <Value data={conversion_lift} column=lift_pct fmt=pct2/> incremental revenue.
 </Alert>
 
 <LineChart

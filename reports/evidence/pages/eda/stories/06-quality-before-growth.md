@@ -14,7 +14,8 @@ select
     round(avg(return_record_rate), 4) as avg_return_rate,
     round(avg(return_unit_rate), 4) as avg_return_unit_rate,
     sum(return_record_count) as total_return_records,
-    sum(return_units) as total_return_units
+    sum(return_units) as total_return_units,
+    round(1.0 / nullif(avg(return_record_rate), 0), 0) as orders_per_return
 from datathon_warehouse.mart_daily_returns_kpis
 ```
 
@@ -79,11 +80,11 @@ select
 from datathon_warehouse.mart_daily_returns_kpis
 ```
 
-## 1. The Rate: One in Every ~20 Orders Returns
+## 1. The Rate: One in Every <Value data={return_summary} column=orders_per_return fmt=0/> Orders Returns
 
 <Alert status="info">
-The average return record rate is <b><Value data={return_summary} column=avg_return_rate fmt=pct2/></b>. 
-That means roughly one in every <Value data={return_summary} column=avg_return_rate fmt=pct2/> orders generates a return record. 
+The average return record rate is <b><Value data={return_summary} column=avg_return_rate fmt=pct2/></b>.
+That means roughly 1 in every <Value data={return_summary} column=orders_per_return fmt=0/> orders generates a return record.
 The controllable share — defective + wrong_size — is <b><Value data={controllable_pct} column=controllable_pct fmt=pct2/></b> of all returns.
 </Alert>
 
@@ -156,7 +157,7 @@ This is a baseline quality problem, not a one-off incident.
     x=sales_date
     y=return_record_rate
     title="Daily Return Record Rate Over Time"
-    subtitle="Persistent ~5% baseline — a structural quality issue"
+    subtitle="Return rate stays structurally elevated over time"
     yAxisTitle="Return Record Rate"
     yFmt="pct2"
 >

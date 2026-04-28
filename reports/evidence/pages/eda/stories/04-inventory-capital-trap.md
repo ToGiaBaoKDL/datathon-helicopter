@@ -5,7 +5,7 @@ title: The Inventory Capital Trap
 # The Inventory Capital Trap
 
 <Alert status="warning">
-<b>The question:</b> <Value data={inventory_overview} column=days_supply fmt=0/> days of supply (~2.5 years) with a <Value data={inventory_overview} column=sell_through fmt=pct2/> sell-through rate. 
+<b>The question:</b> <Value data={inventory_overview} column=days_supply fmt=0/> days of supply (~<Value data={inventory_years} column=years fmt=0.0/> years) with a <Value data={inventory_overview} column=sell_through fmt=pct2/> sell-through rate. 
 Working capital is severely tied up in slow-moving stock. Where is the money trapped?
 </Alert>
 
@@ -18,15 +18,25 @@ select
 from datathon_warehouse.mart_monthly_inventory_snapshot
 ```
 
+```sql inventory_years
+select round(avg(avg_days_of_supply) / 365.0, 1) as years
+from datathon_warehouse.mart_monthly_inventory_snapshot
+```
+
+```sql inventory_turns
+select round(avg(avg_sell_through_rate), 2) as turns
+from datathon_warehouse.mart_monthly_inventory_snapshot
+```
+
 ```sql lifecycle_summary
 select
     lifecycle_stage,
     count(*) as products,
-    round(sum(total_revenue)/1e9, 2) as revenue_b,
+    round(sum(total_revenue), 0) as total_revenue,
     round(sum(total_revenue) / count(*), 0) as rev_per_sku
 from datathon_warehouse.mart_product_lifetime_performance
 group by 1
-order by revenue_b desc
+order by total_revenue desc
 ```
 
 ```sql monthly_inventory_trend
@@ -84,9 +94,9 @@ select
 ## 1. The Scale: 2.5 Years of Supply
 
 <Alert status="info">
-The business carries <b><Value data={inventory_overview} column=days_supply fmt=0/> days</b> of supply on average. 
-With a sell-through rate of only <Value data={inventory_overview} column=sell_through fmt=pct2/>, inventory turns once every 6.6 years. 
-Healthy retail turns inventory 4–6× per year (60–90 days). This business turns it 0.15× per year.
+The business carries <b><Value data={inventory_overview} column=days_supply fmt=0/> days</b> of supply on average — roughly <Value data={inventory_years} column=years fmt=0.0/> years. 
+With a sell-through rate of only <Value data={inventory_overview} column=sell_through fmt=pct2/>, inventory turns <Value data={inventory_turns} column=turns fmt=0.00/>× per year. 
+Healthy retail turns inventory 4–6× per year (60–90 days).
 </Alert>
 
 <Grid cols=4>
@@ -129,7 +139,7 @@ The majority of the catalog is dead weight.
     x=lifecycle_stage
     y=products
     title="Product Count by Lifecycle Stage"
-    subtitle="1,670 of 2,412 SKUs are dead weight (never_sold or discontinued)"
+    subtitle="Most SKUs are dead weight — never_sold or discontinued"
     yAxisTitle="Products"
     yFmt="num0"
 />
@@ -137,11 +147,11 @@ The majority of the catalog is dead weight.
 <BarChart
     data={lifecycle_summary}
     x=lifecycle_stage
-    y=revenue_b
+    y=total_revenue
     title="Total Revenue by Lifecycle Stage"
     subtitle="Active products concentrate revenue; never_sold generates nothing"
-    yAxisTitle="Revenue (Billions VND)"
-    yFmt="0.0"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
 />
 
 ## 3. Efficiency: Active vs Discontinued
@@ -181,7 +191,7 @@ Active is <b><Value data={active_disc_ratio} column=ratio fmt=0.0x/></b> more ef
     x=sales_date
     y=avg_sell_through_rate
     title="Sell-Through Rate Over Time"
-    subtitle="Sell-through hovers around 15% — far below healthy retail norms"
+    subtitle="Sell-through sits well below healthy retail benchmarks"
     yAxisTitle="Sell-Through Rate"
     yFmt="pct2"
 >
