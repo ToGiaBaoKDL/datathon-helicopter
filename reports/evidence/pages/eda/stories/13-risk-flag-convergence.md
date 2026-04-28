@@ -144,6 +144,11 @@ These are not independent risks — they amplify each other.
 
 ## 4. Annual Trend: Are Risks Intensifying?
 
+<Alert status="info">
+The compound risk rate (days with 2+ simultaneous flags) has fluctuated over the years 
+but remains structurally present. This is not a one-off anomaly — it is a built-in feature of the business model.
+</Alert>
+
 <BarChart
     data={flag_by_year}
     x=year

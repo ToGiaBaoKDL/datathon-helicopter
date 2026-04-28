@@ -160,7 +160,8 @@ The COD cancellation premium is persistent across time. It is not a seasonal spi
 
 <Alert status="info">
 If <b>10%</b> of COD orders shifted to prepaid, <b><Value data={what_if_shift} column=saved_orders fmt=0/></b> orders would be saved from cancellation. 
-At current AOV, that is substantial recovered revenue with zero marketing spend.
+At current AOV, that is substantial recovered revenue with zero marketing spend. 
+Caveat: shifted COD users may not instantly match prepaid cancellation rates due to self-selection bias (higher-trust customers already choose prepaid).
 </Alert>
 
 <Grid cols=2>

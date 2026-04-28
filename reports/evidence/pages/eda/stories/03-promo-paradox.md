@@ -137,7 +137,7 @@ The business chooses scale over efficiency.
     xFmt="pct2"
     yFmt="num0"
 >
-    <ReferenceArea xMin=0.20 label="Diminishing Returns" color=warning opacity=0.18/>
+    <ReferenceLine x=0.20 label="20% Threshold" hideValue=true color=warning lineType=dashed/>
 </BubbleChart>
 
 ## 3. Category Impact: Fixed Wins Everywhere

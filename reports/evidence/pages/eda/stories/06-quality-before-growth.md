@@ -80,6 +80,34 @@ select
 from datathon_warehouse.mart_daily_returns_kpis
 ```
 
+```sql refund_revenue_pct
+select
+    round(
+        (select sum(refund_amount) from datathon_warehouse.mart_daily_returns_kpis)
+        / nullif((select sum(revenue) from datathon_warehouse.mart_daily_executive_kpis), 0),
+        4
+    ) as refund_pct
+```
+
+```sql what_if_quality
+with base as (
+    select
+        sum(defective_return_count + wrong_size_return_count) as controllable_returns,
+        sum(refund_amount) as total_refund,
+        sum(defective_return_count + wrong_size_return_count + not_as_described_return_count + changed_mind_return_count + late_delivery_return_count) as total_returns,
+        round(sum(refund_amount)::double / nullif(sum(return_record_count), 0), 0) as avg_refund_per_return
+    from datathon_warehouse.mart_daily_returns_kpis
+)
+select
+    controllable_returns,
+    total_refund,
+    avg_refund_per_return,
+    round(controllable_returns * 0.5, 0) as reducible_returns,
+    round(reducible_returns * avg_refund_per_return, 0) as refund_savings,
+    round(refund_savings::double / nullif((select sum(revenue) from datathon_warehouse.mart_daily_executive_kpis), 0), 4) as revenue_pct_saved
+from base
+```
+
 ## 1. The Rate: One in Every <Value data={return_summary} column=orders_per_return fmt=0/> Orders Returns
 
 <Alert status="info">
@@ -171,7 +199,7 @@ Defective and wrong_size returns represent a direct refund cost plus reverse log
 The total lifetime refund amount across all returns is substantial.
 </Alert>
 
-<Grid cols=2>
+<Grid cols=3>
     <BigValue
         data={refund_total}
         value=total_return_units
@@ -184,13 +212,49 @@ The total lifetime refund amount across all returns is substantial.
         title="Total Refund Amount"
         fmt="num0"
     />
+    <BigValue
+        data={refund_revenue_pct}
+        value=refund_pct
+        title="Refund as % of Revenue"
+        fmt="pct2"
+    />
+</Grid>
+
+## 6. What-If: Cutting Controllable Returns by Half
+
+<Alert status="info">
+Controllable returns (defective + wrong_size) total <Value data={what_if_quality} column=controllable_returns fmt=0/> records.
+Cutting this by 50% prevents <Value data={what_if_quality} column=reducible_returns fmt=0/> returns
+and saves <Value data={what_if_quality} column=refund_savings fmt=num0/> VND in refunds.
+That is <Value data={what_if_quality} column=revenue_pct_saved fmt=pct2/> of total revenue protected.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_quality}
+        value=controllable_returns
+        title="Controllable Returns"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_quality}
+        value=reducible_returns
+        title="50% Reduction"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_quality}
+        value=refund_savings
+        title="Refund Savings (VND)"
+        fmt="num0"
+    />
 </Grid>
 
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> <Value data={controllable_pct} column=controllable_pct fmt=pct2/> of returns are controllable. 
-Implement supplier QC checks to reduce defective rates. 
-Deploy detailed sizing guides and fit tools for top-returned categories. 
+<b>Action:</b> <Value data={controllable_pct} column=controllable_pct fmt=pct2/> of returns are controllable.
+Implement supplier QC checks to reduce defective rates.
+Deploy detailed sizing guides and fit tools for top-returned categories.
 Target: cut controllable returns by 50% within 6 months.
 </Alert>

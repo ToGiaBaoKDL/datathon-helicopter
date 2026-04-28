@@ -6,7 +6,7 @@ title: The Seasonality Paradox
 
 <Alert status="warning">
 <b>The question:</b> Q4 average seasonal index is <b><Value data={q4_avg} column=q4_index fmt=num2/></b>, Q1 is <b><Value data={q1_avg} column=q1_index fmt=num2/></b>.
-April–May peaks at <b><Value data={peak_months} column=seasonal_index row=0 fmt=num2/></b>. Why does this business not benefit from year-end holidays?
+Spring peaks at <b><Value data={peak_months} column=seasonal_index row=0 fmt=num2/></b>. Why does this business not benefit from year-end holidays?
 </Alert>
 
 ```sql seasonal_index
@@ -122,7 +122,7 @@ Orders cluster around mid-week and month-end paycheck timing.
     x=day_name
     y=avg_revenue
     title="Average Revenue by Day of Week"
-    subtitle="Salary-cycle pattern: weekdays outperform weekends"
+    subtitle="Weekdays outperform weekends — consistent with a salary-cycle hypothesis"
     yAxisTitle="Revenue (VND)"
     yFmt="num0"
 />
@@ -131,7 +131,7 @@ Orders cluster around mid-week and month-end paycheck timing.
 
 <Alert status="info">
 Month-end days (29–31) generate substantially more revenue than other days. 
-This confirms the salary-cycle hypothesis — customers shop when they get paid.
+This pattern is consistent with a salary-cycle hypothesis — customers may shop when they receive income.
 </Alert>
 
 <BarChart
@@ -147,7 +147,7 @@ This confirms the salary-cycle hypothesis — customers shop when they get paid.
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> This business peaks in <b>April–May</b> (salary cycle + seasonal demand) and troughs in <b>November–December</b>. 
+<b>Action:</b> This business peaks in <b>spring</b> (salary cycle + seasonal demand) and troughs in <b>Q4</b>. 
 The conventional Q4 holiday marketing playbook is wrong for this category. 
 Shift marketing budget from Q4 to Apr–May. Run month-end flash sales to capture paycheck timing.
 </Alert>

@@ -91,7 +91,25 @@ select
     ) as ratio
 ```
 
-## 1. The Scale: 2.5 Years of Supply
+```sql what_if_inventory
+with inventory_stats as (
+    select round(avg(avg_days_of_supply), 0) as days_supply
+    from datathon_warehouse.mart_monthly_inventory_snapshot
+),
+cogs_stats as (
+    select round(avg(cogs), 0) as avg_daily_cogs
+    from datathon_warehouse.mart_daily_executive_kpis
+)
+select
+    days_supply,
+    avg_daily_cogs,
+    days_supply - 90 as excess_days,
+    round((days_supply - 90) * avg_daily_cogs, 0) as capital_freed,
+    round((days_supply - 90) * avg_daily_cogs * 12, 0) as annual_working_capital_cycle
+from inventory_stats, cogs_stats
+```
+
+## 1. The Scale: Years of Supply
 
 <Alert status="info">
 The business carries <b><Value data={inventory_overview} column=days_supply fmt=0/> days</b> of supply on average — roughly <Value data={inventory_years} column=years fmt=0.0/> years. 
@@ -211,10 +229,39 @@ Active is <b><Value data={active_disc_ratio} column=ratio fmt=0.0x/></b> more ef
     yFmt="num0"
 />
 
+## 6. What-If: Right-Sizing Inventory
+
+<Alert status="info">
+Industry standard is 90 days of supply. The business currently carries <Value data={what_if_inventory} column=days_supply fmt=0/> days.
+Right-sizing to 90 days would free up <Value data={what_if_inventory} column=capital_freed fmt=num0/> VND in working capital.
+That is equivalent to <Value data={what_if_inventory} column=annual_working_capital_cycle fmt=num0/> VND over a full 12-month inventory cycle.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_inventory}
+        value=days_supply
+        title="Current Days of Supply"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_inventory}
+        value=excess_days
+        title="Excess Days vs 90"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_inventory}
+        value=capital_freed
+        title="Capital Freed (VND)"
+        fmt="num0"
+    />
+</Grid>
+
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> Target 90 days of supply (industry standard). 
-Delist <Value data={never_sold_count} column=never_sold_products fmt=0/> never_sold SKUs immediately — they generate zero revenue and tie up catalog complexity. 
+<b>Action:</b> Target 90 days of supply (industry standard).
+Delist <Value data={never_sold_count} column=never_sold_products fmt=0/> never_sold SKUs immediately — they generate zero revenue and tie up catalog complexity.
 Run clearance on dormant. Active products are <b><Value data={active_disc_ratio} column=ratio fmt=0.0x/></b> more productive than discontinued — prioritize active replenishment over expanding SKU count.
 </Alert>

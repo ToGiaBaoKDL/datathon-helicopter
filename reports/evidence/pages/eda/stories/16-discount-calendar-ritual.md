@@ -5,7 +5,7 @@ title: The Discount Calendar Ritual
 # The Discount Calendar Ritual
 
 <Alert status="warning">
-<b>The question:</b> Every year the business runs the same percentage promos at the same ~12.9% discount. 
+<b>The question:</b> Every year the business runs the same percentage promos at the same <Value data={percentage_discount} column=avg_pct_discount fmt=pct2/> average discount. 
 Revenue from these campaigns has fallen <Value data={revenue_drop} column=revenue_drop_pct fmt=pct2/> since 2013. 
 Is the discount calendar a revenue engine or a margin ritual?
 </Alert>
@@ -36,6 +36,13 @@ from datathon_warehouse.mart_promotion_effectiveness
 where total_orders > 0
 group by 1
 order by total_revenue desc
+```
+
+```sql percentage_discount
+select round(avg(discount_rate), 4) as avg_pct_discount
+from datathon_warehouse.mart_promotion_effectiveness
+where promo_type = 'percentage'
+  and total_orders > 0
 ```
 
 ```sql revenue_drop
@@ -114,6 +121,17 @@ The discount rate has barely changed in a decade — a ritual, not a strategy.
 Percentage promo revenue peaked in 2013–2015 and has declined since. 
 The business is discounting at the same rate but generating less return — a classic diminishing-returns pattern.
 </Alert>
+
+<LineChart
+    data={promo_trend}
+    x=year
+    y=total_revenue
+    series=promo_type
+    title="Promo Revenue Trend Over Time"
+    subtitle="Percentage promo revenue peaked early and has declined since"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
+/>
 
 <Grid cols=2>
     <BigValue

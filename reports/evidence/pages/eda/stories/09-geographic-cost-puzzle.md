@@ -61,6 +61,16 @@ from datathon_warehouse.mart_region_fulfillment_profile
 order by aov desc
 ```
 
+```sql category_return_rate
+select
+    category,
+    round(avg(return_unit_rate), 4) as avg_return_rate
+from datathon_warehouse.mart_product_lifetime_performance
+where lifecycle_stage != 'never_sold'
+group by 1
+order by avg_return_rate desc
+```
+
 ```sql region_return_rank
 select
     region,
@@ -68,6 +78,29 @@ select
     round(total_revenue, 0) as total_revenue
 from datathon_warehouse.mart_region_fulfillment_profile
 order by return_unit_rate desc
+```
+
+```sql what_if_west
+with west as (
+    select region, total_orders, total_revenue, total_units_sold, return_unit_rate, return_units, refund_amount
+    from datathon_warehouse.mart_region_fulfillment_profile
+    where region = 'West'
+),
+east as (
+    select return_unit_rate
+    from datathon_warehouse.mart_region_fulfillment_profile
+    where region = 'East'
+)
+select
+    w.total_orders,
+    w.total_revenue,
+    w.return_units as west_return_units,
+    w.return_unit_rate as west_rate,
+    e.return_unit_rate as east_rate,
+    round(w.total_units_sold * (w.return_unit_rate - e.return_unit_rate), 0) as avoidable_return_units,
+    round(w.refund_amount * (w.return_unit_rate - e.return_unit_rate) / nullif(w.return_unit_rate, 0), 0) as avoidable_refund,
+    round(avoidable_refund::double / nullif(w.total_revenue, 0), 4) as pct_of_revenue
+from west w, east e
 ```
 
 ## 1. Revenue Map: East Dominates
@@ -164,11 +197,53 @@ If West over-indexes on a category with historically high returns, that explains
     yFmt="num0"
 />
 
+<BarChart
+    data={category_return_rate}
+    x=category
+    y=avg_return_rate
+    title="Return Rate by Category"
+    subtitle="If West over-indexes on high-return categories, the puzzle is solved"
+    yAxisTitle="Return Unit Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
+</BarChart>
+
+## 5. What-If: West Returns at East Level
+
+<Alert status="info">
+If West achieved the same return unit rate as East,
+<Value data={what_if_west} column=avoidable_return_units fmt=0/> return units would be prevented,
+saving <Value data={what_if_west} column=avoidable_refund fmt=num0/> VND in refunds.
+That equals <Value data={what_if_west} column=pct_of_revenue fmt=pct2/> of West revenue — a meaningful profitability recovery for the smallest region.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_west}
+        value=west_return_units
+        title="West Return Units"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_west}
+        value=avoidable_return_units
+        title="Avoidable Returns"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_west}
+        value=avoidable_refund
+        title="Refund Savings (VND)"
+        fmt="num0"
+    />
+</Grid>
+
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> West has the lowest revenue share but the highest return rate (<Value data={west_return} column=return_unit_rate fmt=pct2/>). 
-Delivery speed and shipping fee are uniform — the issue is not logistics cost. 
-Investigate whether product mix in West skews toward high-return categories. 
+<b>Action:</b> West has the lowest revenue share but the highest return rate (<Value data={west_return} column=return_unit_rate fmt=pct2/>).
+Delivery speed and shipping fee are uniform — the issue is not logistics cost.
+Investigate whether product mix in West skews toward high-return categories.
 Improve sizing guides for West-targeted campaigns.
 </Alert>

@@ -5,7 +5,7 @@ title: The Device Blind Spot
 # The Device Blind Spot
 
 <Alert status="warning">
-<b>The question:</b> Story 01 showed conversion collapsed 73% over a decade. 
+<b>The question:</b> Story 01 showed conversion collapsed <Value data={conversion_decline} column=decline_pct fmt=pct2/> over a decade. 
 Is mobile the culprit? Or does the conversion crisis hit every device equally?
 </Alert>
 
@@ -29,6 +29,15 @@ select
 from datathon_warehouse.mart_daily_conversion_breakdown
 where breakdown_type = 'device_type'
 order by sales_date
+```
+
+```sql conversion_decline
+select
+    max(session_to_order_rate) as peak_conversion,
+    min(session_to_order_rate) as trough_conversion,
+    round((min(session_to_order_rate) - max(session_to_order_rate)) / nullif(max(session_to_order_rate), 0), 4) as decline_pct
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
 ```
 
 ```sql device_cancel

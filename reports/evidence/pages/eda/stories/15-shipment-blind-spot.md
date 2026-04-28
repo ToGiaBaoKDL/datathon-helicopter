@@ -15,7 +15,7 @@ select
     sum(orders_with_shipment) as with_shipment,
     sum(orders_without_shipment) as without_shipment,
     round(sum(orders_without_shipment)::double / nullif(sum(total_orders), 0), 4) as gap_rate
-from datathon_warehouse.mart_daily_shipment_gap
+from datathon_warehouse.mart_daily_shipment_coverage
 where order_status not in ('cancelled')
 ```
 
@@ -25,7 +25,7 @@ select
     sum(total_orders) as total_orders,
     sum(orders_without_shipment) as no_shipment_orders,
     round(sum(orders_without_shipment)::double / nullif(sum(total_orders), 0), 4) as gap_rate
-from datathon_warehouse.mart_daily_shipment_gap
+from datathon_warehouse.mart_daily_shipment_coverage
 group by 1
 order by gap_rate desc
 ```
@@ -34,14 +34,14 @@ order by gap_rate desc
 select
     sum(case when order_status = 'delivered' then orders_without_shipment else 0 end) as delivered_no_shipment,
     sum(case when order_status = 'delivered' then total_orders else 0 end) as delivered_total
-from datathon_warehouse.mart_daily_shipment_gap
+from datathon_warehouse.mart_daily_shipment_coverage
 ```
 
 ```sql delivered_by_year
 select
     date_part('year', sales_date)::int as year,
     sum(orders_without_shipment) as delivered_no_shipment
-from datathon_warehouse.mart_daily_shipment_gap
+from datathon_warehouse.mart_daily_shipment_coverage
 where order_status = 'delivered'
 group by 1
 order by 1
@@ -51,13 +51,34 @@ order by 1
 select
     date_part('year', sales_date)::int as year,
     round(avg(shipment_coverage_rate), 4) as avg_coverage
-from datathon_warehouse.mart_daily_shipment_gap
+from datathon_warehouse.mart_daily_shipment_coverage
 where order_status not in ('cancelled')
 group by 1
 order by 1
 ```
 
-## 1. The Gap: 3.6% of Non-Cancelled Orders Lack Shipment Data
+```sql what_if_coverage
+with base as (
+    select
+        sum(total_orders) as total_orders,
+        sum(orders_with_shipment) as with_shipment,
+        sum(orders_without_shipment) as without_shipment,
+        round(avg(shipment_coverage_rate), 4) as avg_coverage
+    from datathon_warehouse.mart_daily_shipment_coverage
+    where order_status not in ('cancelled')
+)
+select
+    total_orders,
+    with_shipment,
+    without_shipment,
+    avg_coverage,
+    round(total_orders * 0.95, 0) as target_orders_with_shipment,
+    round(target_orders_with_shipment - with_shipment, 0) as additional_visible_orders,
+    round((0.95 - avg_coverage) * total_orders, 0) as gap_orders
+from base
+```
+
+## 1. The Gap: Non-Cancelled Orders Lack Shipment Data
 
 <Alert status="info">
 Out of <Value data={shipment_gap} column=total_orders fmt=0/> non-cancelled orders, 
@@ -118,7 +139,7 @@ All <Value data={delivered_gap} column=delivered_no_shipment fmt=0/> cases occur
 ## 4. Coverage Trend: Are We Losing Visibility?
 
 <Alert status="info">
-Shipment coverage rate for non-cancelled orders has hovered around 62–66% for a decade. 
+Shipment coverage rate for non-cancelled orders has hovered below two-thirds for a decade. 
 This low baseline suggests a structural integration gap between order and logistics systems.
 </Alert>
 
@@ -134,11 +155,40 @@ This low baseline suggests a structural integration gap between order and logist
     <ReferenceLine y=0.95 label="95% Target" hideValue=true color=positive lineType=dashed/>
 </LineChart>
 
+## 5. What-If: Closing the Coverage Gap
+
+<Alert status="info">
+Industry target is 95% shipment coverage. Current coverage is <Value data={what_if_coverage} column=avg_coverage fmt=pct2/>.
+Closing the gap to 95% would make <Value data={what_if_coverage} column=additional_visible_orders fmt=0/> additional orders visible to operations and customer service.
+That reduces the blind spot from <Value data={what_if_coverage} column=without_shipment fmt=0/> orders to near zero.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_coverage}
+        value=avg_coverage
+        title="Current Coverage"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_coverage}
+        value=gap_orders
+        title="Gap to 95% (Orders)"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_coverage}
+        value=additional_visible_orders
+        title="Orders Gained"
+        fmt="0"
+    />
+</Grid>
+
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> Audit the order-to-shipment data pipeline immediately. 
-The <Value data={delivered_gap} column=delivered_no_shipment fmt=0/> delivered orders without shipment records in 2022 suggest an ETL or logistics integration failure. 
-All non-cancelled orders should have shipment coverage above 95%. 
-Current coverage at ~63% means one in three orders is invisible to operations — a compliance and customer-service liability.
+<b>Action:</b> Audit the order-to-shipment data pipeline immediately.
+The <Value data={delivered_gap} column=delivered_no_shipment fmt=0/> delivered orders without shipment records in 2022 suggest an ETL or logistics integration failure.
+All non-cancelled orders should have shipment coverage above 95%.
+Current coverage at <Value data={what_if_coverage} column=avg_coverage fmt=pct2/> means one in three orders is invisible to operations — a compliance and customer-service liability.
 </Alert>

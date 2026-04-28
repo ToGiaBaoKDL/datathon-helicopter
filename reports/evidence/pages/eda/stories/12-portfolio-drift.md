@@ -75,6 +75,31 @@ from datathon_warehouse.mart_monthly_category_performance
 order by month_start_date, category
 ```
 
+```sql what_if_mix
+with base as (
+    select
+        sum(case when category = 'Streetwear' then gross_revenue else 0 end) as streetwear_revenue,
+        sum(case when category = 'GenZ' then gross_revenue else 0 end) as genz_revenue,
+        sum(case when category = 'Streetwear' then gross_profit else 0 end) / nullif(sum(case when category = 'Streetwear' then gross_revenue else 0 end), 0) as streetwear_margin,
+        sum(case when category = 'GenZ' then gross_profit else 0 end) / nullif(sum(case when category = 'GenZ' then gross_revenue else 0 end), 0) as genz_margin,
+        sum(gross_revenue) as total_revenue,
+        sum(gross_profit) as total_gross_profit
+    from datathon_warehouse.mart_monthly_category_performance
+)
+select
+    total_revenue,
+    total_gross_profit,
+    round(total_gross_profit::double / nullif(total_revenue, 0), 4) as current_margin,
+    streetwear_revenue,
+    streetwear_margin,
+    genz_margin,
+    round(streetwear_revenue * 0.10, 0) as shift_amount,
+    round((total_gross_profit + shift_amount * (genz_margin - streetwear_margin)) / nullif(total_revenue, 0), 4) as new_margin,
+    round(new_margin - current_margin, 4) as margin_lift,
+    round(shift_amount * (genz_margin - streetwear_margin), 0) as profit_lift
+from base
+```
+
 ## 1. Category Revenue: Streetwear Dominates
 
 <Alert status="info">
@@ -178,10 +203,48 @@ Return rate erodes margin. If Streetwear has high returns, that partly explains 
     <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
 </LineChart>
 
+## 6. What-If: Shifting Revenue Mix
+
+<Alert status="info">
+The portfolio currently earns <Value data={what_if_mix} column=current_margin fmt=pct2/> gross margin.
+If 10% of Streetwear revenue shifted to GenZ,
+portfolio margin would rise to <Value data={what_if_mix} column=new_margin fmt=pct2/>
+(a <Value data={what_if_mix} column=margin_lift fmt=pct2/> lift),
+adding <Value data={what_if_mix} column=profit_lift fmt=num0/> VND in gross profit
+without growing total revenue.
+</Alert>
+
+<Grid cols=4>
+    <BigValue
+        data={what_if_mix}
+        value=current_margin
+        title="Current Portfolio Margin"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_mix}
+        value=new_margin
+        title="Shifted Portfolio Margin"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_mix}
+        value=margin_lift
+        title="Margin Lift"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_mix}
+        value=profit_lift
+        title="Profit Lift (VND)"
+        fmt="num0"
+    />
+</Grid>
+
 ## The Verdict
 
 <Alert status="positive">
-<b>Action:</b> The revenue engine (Streetwear, <Value data={streetwear_stats} column=total_revenue fmt=num0/> VND) is the lowest-margin category (<Value data={streetwear_stats} column=avg_margin_rate fmt=pct2/>). 
-High-margin categories (GenZ <Value data={genz_stats} column=avg_margin_rate fmt=pct2/>, Casual) are small. 
+<b>Action:</b> The revenue engine (Streetwear, <Value data={streetwear_stats} column=total_revenue fmt=num0/> VND) is the lowest-margin category (<Value data={streetwear_stats} column=avg_margin_rate fmt=pct2/>).
+High-margin categories (GenZ <Value data={genz_stats} column=avg_margin_rate fmt=pct2/>, Casual) are small.
 Grow GenZ/Casual marketing share. Negotiate Streetwear COGS with suppliers. Review Streetwear pricing power — even a 2-point margin lift on <Value data={margin_lift_value} column=streetwear_revenue fmt=num0/> VND is <Value data={margin_lift_value} column=two_point_lift fmt=num0/> VND.
 </Alert>

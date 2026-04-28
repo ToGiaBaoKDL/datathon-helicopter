@@ -10,6 +10,18 @@ One-page overview of top insights, risks, and recommended actions based on <Valu
 select count(*) as total_days from datathon_warehouse.mart_daily_executive_kpis
 ```
 
+```sql revenue_cogs_profit_long
+select sales_date, 'Revenue' as metric, revenue as value
+from datathon_warehouse.mart_daily_executive_kpis
+union all
+select sales_date, 'COGS' as metric, cogs as value
+from datathon_warehouse.mart_daily_executive_kpis
+union all
+select sales_date, 'Gross Profit' as metric, gross_profit as value
+from datathon_warehouse.mart_daily_executive_kpis
+order by sales_date
+```
+
 ```sql _date_bounds
 select sales_date from datathon_warehouse.mart_daily_executive_kpis
 ```
@@ -18,6 +30,17 @@ select sales_date from datathon_warehouse.mart_daily_executive_kpis
     name=date_range
     data={_date_bounds}
     dates=sales_date
+/>
+
+<AreaChart
+    data={revenue_cogs_profit_long}
+    x=sales_date
+    y=value
+    series=metric
+    title="Revenue, COGS, and Gross Profit"
+    subtitle="Executive overview of top-line, direct cost, and margin dollars over the full period"
+    yAxisTitle="VND"
+    yFmt="num0"
 />
 
 ```sql top_insights

@@ -61,6 +61,18 @@ where realized_margin_rate < 0
   and lifecycle_stage != 'never_sold'
 ```
 
+```sql negative_margin_pct
+select
+    round(
+        count(*)::double
+        / (select count(*) from datathon_warehouse.mart_product_lifetime_performance where lifecycle_stage != 'never_sold'),
+        4
+    ) as pct
+from datathon_warehouse.mart_product_lifetime_performance
+where realized_margin_rate < 0
+  and lifecycle_stage != 'never_sold'
+```
+
 ```sql active_negative_count
 select count(*) as active_negative_skus
 from datathon_warehouse.mart_product_lifetime_performance
@@ -76,12 +88,20 @@ Every transaction on these SKUs deepens the loss.
 <Value data={active_negative_count} column=active_negative_skus fmt=0/> of them are still labeled <b>active</b> — meaning they are actively replenished and promoted.
 </Alert>
 
-<BigValue
-    data={negative_margin_count}
-    value=negative_margin_products
-    title="Negative-Margin Products"
-    fmt="0"
-/>
+<Grid cols=2>
+    <BigValue
+        data={negative_margin_count}
+        value=negative_margin_products
+        title="Negative-Margin Products"
+        fmt="0"
+    />
+    <BigValue
+        data={negative_margin_pct}
+        value=pct
+        title="Share of Total SKU Base"
+        fmt="pct2"
+    />
+</Grid>
 
 ## 2. Category Breakdown: Where the Bleeding Is Concentrated
 

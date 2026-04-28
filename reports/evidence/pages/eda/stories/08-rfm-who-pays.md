@@ -102,7 +102,7 @@ group by 1
 order by customer_count desc
 ```
 
-## 1. The Pareto: Top 10% = ~40% of Revenue
+## 1. The Pareto: Top 10% Revenue Concentration
 
 <Alert status="info">
 The top decile of customers generates <b><Value data={top_10_pct} column=top_10_pct fmt=pct2/></b> of total revenue.

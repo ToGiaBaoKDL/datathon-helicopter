@@ -52,6 +52,9 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [The Device Blind Spot](./eda/stories/14-device-blind-spot)
 - [The Shipment Blind Spot](./eda/stories/15-shipment-blind-spot)
 - [The Discount Calendar Ritual](./eda/stories/16-discount-calendar-ritual)
+- [The Revenue Anatomy](./eda/stories/17-revenue-anatomy)
+- [The Unit Economics Map](./eda/stories/18-unit-economics-map)
+- [The Capital Lock-Up](./eda/stories/19-capital-lock-up)
 
 ### Appendix
 - [Analytical Questions & Findings](./eda/appendix/analytical-questions)

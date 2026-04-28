@@ -25,12 +25,16 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
 order by sales_date
 ```
 
-```sql revenue_cogs_long
+```sql revenue_cogs_profit_long
 select sales_date, 'Revenue' as metric, revenue as value
 from datathon_warehouse.mart_forecast_daily_base
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 union all
 select sales_date, 'COGS' as metric, cogs as value
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+union all
+select sales_date, 'Gross Profit' as metric, revenue - cogs as value
 from datathon_warehouse.mart_forecast_daily_base
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 order by sales_date
@@ -204,6 +208,14 @@ from datathon_warehouse.mart_forecast_daily_base
 where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
 ```
 
+```sql cancellation_rate_overall
+select
+    round(avg(cancelled_line_count::double / nullif(order_line_count, 0)), 4) as avg_cancellation_rate,
+    round(1.0 / nullif(avg(cancelled_line_count::double / nullif(order_line_count, 0)), 0), 0) as one_in_x
+from datathon_warehouse.mart_forecast_daily_base
+where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.end}'
+```
+
 ## Revenue Trend
 
 <Alert status="info">
@@ -218,14 +230,14 @@ This is not gradual decline; it's a regime change. The cause: conversion collaps
 </Alert>
 
 <AreaChart
-    data={revenue_cogs_long}
+    data={revenue_cogs_profit_long}
     x=sales_date
     y=value
     series=metric
-    yAxisTitle="Revenue / COGS"
+    yAxisTitle="Revenue / COGS / Gross Profit"
     xAxisTitle="Date"
-    title="Daily Revenue and COGS"
-    subtitle="Top-line scale vs direct cost of goods sold"
+    title="Daily Revenue, COGS, and Gross Profit"
+    subtitle="Top-line scale, direct cost, and margin dollars over time"
     yFmt="num0"
 >
     <ReferenceArea data={anomaly_bounds} yMin=lower_bound yMax=upper_bound color=gray opacity=0.1/>
@@ -377,7 +389,7 @@ YoY tells you if performance is actually declining relative to the same period l
 ## Cancellation Rate Trend
 
 <Alert status="warning">
-<b>Approximately 1 in 10 order lines are cancelled</b> on average — this is lost revenue before it even ships. 
+<b>Approximately 1 in <Value data={cancellation_rate_overall} column=one_in_x fmt=0/> order lines are cancelled</b> (<Value data={cancellation_rate_overall} column=avg_cancellation_rate fmt=pct2/>) on average — this is lost revenue before it even ships. 
 Cancellation rate is a leading indicator of inventory availability, pricing errors, or checkout friction.
 </Alert>
 

@@ -76,15 +76,27 @@ select
     round(avg(case when year = 2013 then avg_sessions end), 0) as sessions_2013,
     round(avg(case when year = 2022 then avg_sessions end), 0) as sessions_2022,
     round(avg(case when year = 2013 then avg_orders end), 0) as orders_2013,
-    round(avg(case when year = 2022 then avg_orders end), 0) as orders_2022
+    round(avg(case when year = 2022 then avg_orders end), 0) as orders_2022,
+    round(
+        (avg(case when year = 2022 then avg_sessions end) - avg(case when year = 2013 then avg_sessions end))
+        / nullif(avg(case when year = 2013 then avg_sessions end), 0),
+        4
+    ) as sess_growth_pct,
+    round(
+        (avg(case when year = 2022 then avg_orders end) - avg(case when year = 2013 then avg_orders end))
+        / nullif(avg(case when year = 2013 then avg_orders end), 0),
+        4
+    ) as orders_change_pct
 from ${annual_conversion}
 ```
 
 ## 1. The Traffic Is There — The Capture Is Not
 
 <Alert status="info">
-Sessions grew <b><Value data={traffic_growth} column=sessions_2022 fmt=num0/> / <Value data={traffic_growth} column=sessions_2013 fmt=num0/> = +63%</b>. 
-Orders fell <b><Value data={traffic_growth} column=orders_2022 fmt=num0/> / <Value data={traffic_growth} column=orders_2013 fmt=num0/> = -54%</b>. 
+Sessions grew <b><Value data={traffic_growth} column=sess_growth_pct fmt=pct2/></b> 
+(<Value data={traffic_growth} column=sessions_2013 fmt=num0/> → <Value data={traffic_growth} column=sessions_2022 fmt=num0/>). 
+Orders fell <b><Value data={traffic_growth} column=orders_change_pct fmt=pct2/></b> 
+(<Value data={traffic_growth} column=orders_2013 fmt=num0/> → <Value data={traffic_growth} column=orders_2022 fmt=num0/>). 
 The top of the funnel is growing. The bottom is leaking.
 </Alert>
 
@@ -107,7 +119,10 @@ The top of the funnel is growing. The bottom is leaking.
 <Alert status="info">
 <Value data={peak_year} column=year/> = peak conversion (<Value data={peak_year} column=peak_conversion fmt=pct2/>). 
 <Value data={trough_year} column=year/> = trough (<Value data={trough_year} column=trough_conversion fmt=pct2/>). 
-Between 2018 and 2019, conversion dropped sharply in a single year. Something structural broke.
+Between 2018 and 2019, conversion dropped sharply in a single year. 
+Three plausible drivers: (1) a traffic source shift toward lower-intent channels, 
+(2) a mobile UX degradation that the 2018–2019 period would have magnified, 
+or (3) a product mix shift away from high-conversion categories.
 </Alert>
 
 <BarChart
