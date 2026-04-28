@@ -49,7 +49,9 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 - [The Seasonality Paradox](./eda/stories/11-seasonality-paradox)
 - [The Portfolio Drift](./eda/stories/12-portfolio-drift)
 - [The Risk Flag Convergence](./eda/stories/13-risk-flag-convergence)
-- [The Mobile Conversion Gap](./eda/stories/14-mobile-conversion-gap)
+- [The Device Blind Spot](./eda/stories/14-device-blind-spot)
+- [The Shipment Blind Spot](./eda/stories/15-shipment-blind-spot)
+- [The Discount Calendar Ritual](./eda/stories/16-discount-calendar-ritual)
 
 ### Appendix
 - [Analytical Questions & Findings](./eda/appendix/analytical-questions)
