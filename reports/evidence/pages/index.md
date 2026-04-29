@@ -2,64 +2,69 @@
 title: EDA Hub
 ---
 
-# EDA Hub
-
 This Evidence app is connected to the same DuckDB warehouse used by dbt and ML scripts.
 
 ## Navigation
 
 ### Executive
-- [Executive Summary](./eda/executive/executive-summary)
-- [Executive KPI Pulse](./eda/executive/executive-kpi-pulse)
-- [Risk Flags](./eda/executive/risk-flags)
+- [01 Executive Summary](./eda/executive/01-executive-summary)
+- [02 Executive KPI Pulse](./eda/executive/02-executive-kpi-pulse)
+- [03 Risk Flags](./eda/executive/03-risk-flags)
 
 ### Finance
-- [Revenue and Business Drivers](./eda/finance/revenue-and-drivers)
-- [Payment and Checkout](./eda/finance/payment-and-checkout)
-- [Seasonal Decomposition](./eda/finance/seasonal-decomposition)
+- [01 Revenue and Business Drivers](./eda/finance/01-revenue-and-drivers)
+- [02 Payment and Checkout](./eda/finance/02-payment-and-checkout)
+- [03 Seasonal Decomposition](./eda/finance/03-seasonal-decomposition)
 
 ### Operations
-- [Fulfillment and Returns](./eda/operations/fulfillment-and-returns)
-- [Inventory and Growth Scorecard](./eda/operations/inventory-and-growth-scorecard)
-- [Geographic Fulfillment](./eda/operations/geographic-fulfillment)
+- [01 Fulfillment and Returns](./eda/operations/01-fulfillment-and-returns)
+- [02 Geographic Fulfillment](./eda/operations/02-geographic-fulfillment)
+- [03 Inventory and Growth Scorecard](./eda/operations/03-inventory-and-growth-scorecard)
 
 ### Marketing
-- [Promotion Effectiveness](./eda/marketing/promotion-effectiveness)
-- [Conversion Funnel](./eda/marketing/conversion-funnel)
+- [01 Conversion Funnel](./eda/marketing/01-conversion-funnel)
+- [02 Promotion Effectiveness](./eda/marketing/02-promotion-effectiveness)
 
 ### Customer
-- [Customer Cohort and RFM](./eda/customer/customer-cohort-and-rfm)
+- [01 Customer Cohort and RFM](./eda/customer/01-customer-cohort-and-rfm)
 
 ### Product
-- [Product Lifecycle and Health](./eda/product/product-lifecycle-and-health)
-- [Category and Region Performance](./eda/product/category-and-region-performance)
-- [Reviews and Quality](./eda/product/reviews-and-quality)
+- [01 Product Lifecycle and Health](./eda/product/01-product-lifecycle-and-health)
+- [02 Category and Region Performance](./eda/product/02-category-and-region-performance)
+- [03 Reviews and Quality](./eda/product/03-reviews-and-quality)
 
-### Business Stories (Narratives)
-- [The Demand Capture Crisis](./eda/stories/01-demand-capture-crisis)
-- [The Retention Trap](./eda/stories/02-retention-trap)
-- [The Promo Paradox](./eda/stories/03-promo-paradox)
-- [The Inventory Capital Trap](./eda/stories/04-inventory-capital-trap)
-- [The Profitability Leak](./eda/stories/05-profitability-leak)
-- [Quality Before Growth](./eda/stories/06-quality-before-growth)
-- [The Cannibalization Test](./eda/stories/07-cannibalization-test)
-- [RFM — Who Pays the Bills?](./eda/stories/08-rfm-who-pays)
-- [The Geographic Cost Puzzle](./eda/stories/09-geographic-cost-puzzle)
-- [The COD Tax](./eda/stories/10-cod-tax)
-- [The Seasonality Paradox](./eda/stories/11-seasonality-paradox)
-- [The Portfolio Drift](./eda/stories/12-portfolio-drift)
-- [The Risk Flag Convergence](./eda/stories/13-risk-flag-convergence)
-- [The Device Blind Spot](./eda/stories/14-device-blind-spot)
-- [The Shipment Blind Spot](./eda/stories/15-shipment-blind-spot)
-- [The Discount Calendar Ritual](./eda/stories/16-discount-calendar-ritual)
-- [The Revenue Anatomy](./eda/stories/17-revenue-anatomy)
-- [The Unit Economics Map](./eda/stories/18-unit-economics-map)
-- [The Capital Lock-Up](./eda/stories/19-capital-lock-up)
+### Business Stories — Marketing
+- [01 The Demand Capture Crisis](./stories/marketing/01-demand-capture-crisis)
+- [02 The Promo Paradox](./stories/marketing/02-promo-paradox)
+- [03 The Cannibalization Test](./stories/marketing/03-cannibalization-test)
+- [04 The Seasonality Paradox](./stories/marketing/04-seasonality-paradox)
+- [05 The Discount Calendar Ritual](./stories/marketing/05-discount-calendar-ritual)
+- [06 The Device Blind Spot](./stories/marketing/06-device-blind-spot)
+
+### Business Stories — Customer
+- [01 The Retention Trap](./stories/customer/01-retention-trap)
+- [02 RFM — Who Pays the Bills?](./stories/customer/02-rfm-who-pays)
+- [03 The Unit Economics Map](./stories/customer/03-unit-economics-map)
+
+### Business Stories — Product
+- [01 The Inventory Capital Trap](./stories/product/01-inventory-capital-trap)
+- [02 The Profitability Leak](./stories/product/02-profitability-leak)
+- [03 Quality Before Growth](./stories/product/03-quality-before-growth)
+- [04 The Portfolio Drift](./stories/product/04-portfolio-drift)
+
+### Business Stories — Operations
+- [01 The Geographic Cost Puzzle](./stories/operations/01-geographic-cost-puzzle)
+- [02 The COD Tax](./stories/operations/02-cod-tax)
+- [03 The Risk Flag Convergence](./stories/operations/03-risk-flag-convergence)
+- [04 The Shipment Blind Spot](./stories/operations/04-shipment-blind-spot)
+
+### Business Stories — Finance
+- [01 The Revenue Anatomy](./stories/finance/01-revenue-anatomy)
+- [02 The Capital Lock-Up](./stories/finance/02-capital-lock-up)
 
 ### Appendix
-- [Analytical Questions & Findings](./eda/appendix/analytical-questions)
-- [Part 1 MCQ Metrics](./eda/appendix/part1-mcq-metrics)
-- [Forecast Feature Health](./eda/appendix/forecast-feature-health)
+- [01 Forecast Feature Health](./eda/appendix/01-forecast-feature-health)
+- [02 MCQ Metrics](./eda/appendix/02-mcq-metrics)
 
 ## Data Build Order
 
