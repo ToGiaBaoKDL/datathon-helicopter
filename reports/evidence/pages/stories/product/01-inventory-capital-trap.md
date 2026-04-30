@@ -309,7 +309,7 @@ That is equivalent to <Value data={what_if_inventory} column=annual_working_capi
 <b>Action:</b> Target 90 days of supply (industry standard).
 Delist <Value data={never_sold_count} column=never_sold_products fmt=0/> never_sold SKUs immediately — they generate zero revenue and tie up catalog complexity.
 Run clearance on dormant. Active products are <b><Value data={active_disc_ratio} column=ratio fmt=0.0/>×</b> more productive than discontinued — prioritize active replenishment over expanding SKU count.
-See also <a href="/stories/finance/02-capital-lock-up">Story 02: The Capital Lock-Up</a> for a CFO view on working capital impact.
+See also <a href="/eda/operations/03-inventory-and-growth-scorecard">Inventory and Growth Scorecard</a> for operational inventory metrics.
 </Alert>
 
 ## Deep Dive

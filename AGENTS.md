@@ -5,6 +5,112 @@ Analytics / forecasting repo for datathon round 1. Stack: uv, dbt + DuckDB, Evid
 
 ## What We Did This Session
 
+### 40. Final Review — Tết Removal, Feature Pruning, Config Testing
+**Phát hiện trong round review cuối:**
+1. **Tết features (tet_date, days_to_tet) không cần thiết** — Tết chỉ ảnh hưởng 1-2 tuần/năm, model dành capacity học pattern này nhưng không generalize tốt cho 548-day horizon. Evaluate sau khi xóa Tết:
+   - Revenue MAE: **821,861** (trước: 843,546) — **-2.6%** ✅
+   - COGS MAE: **758,495** (trước: 804,906) — **-5.8%** ✅
+2. **Feature pruning** — Xóa 8 features redundant dựa trên correlation > 0.95:
+   - `day_of_month` (redundant với `days_to_month_end`)
+   - `week_of_year_sin/cos` (redundant với `day_of_year_sin/cos`)
+   - `roll_median_7d/28d_revenue` (redundant với `roll_mean`)
+   - `year`, `day_of_year`, `week_of_year` (moved to `_META_COLUMNS` — used for internal computations only)
+3. **First-difference features** — Thêm `revenue_diff_7d` (lag_1d - lag_7d), `cogs_diff_7d` cho momentum.
+4. **promo_month_prob** — Normalize `promo_month_day_count / days_in_month` để tỷ lệ [0,1].
+5. **cogs_ratio_trend_28d** — Python-only trend slope trên cogs_ratio (EMA consistent, backfill + recursive cùng dùng `_ema_next`).
+6. **Config testing** — So sánh `sequential_cogs=true + cogs_target=absolute` (1.58M total MAE) vs `sequential_cogs=false + cogs_target=ratio` (1.78M). Config hiện tại tốt hơn.
+7. **Tuned config test** — `datathon tune --n-trials 5` chạy thành công, saved delta config to `configs/tuned/lightgbm.yaml`.
+8. **Dead code removal** — Xóa `_load_tet_dates()`, `functools` import, `seeds.yml`, `tet_dates.csv`, tất cả test references. No stale references remain.
+
+**Validation:**
+- `ruff check src/ tests/` — All passed.
+- `pytest tests/test_recursive.py tests/test_trainer.py` — 19 passed, 4 skipped, 0 failed.
+- `dbt build --select mart_forecast_daily_features` — 3/3 PASS.
+- `datathon train --mode evaluate` — Chạy thành công, zero errors.
+- Feature count: 62 → **51** (after pruning + tet removal + new features).
+
+### 39. CatBoost Bagging Temperature Fix
+**Bug:** `_suggest_catboost` luôn suggest `bagging_temperature` dù base config có `bootstrap_type: Bernoulli`. CatBoost reject parameter này khi không dùng Bayesian bootstrap.
+**Fix:** `_suggest_catboost` nhận `base_config`, kiểm tra `bootstrap_type`. Chỉ suggest `bagging_temperature` khi `bootstrap_type == "Bayesian"` (default). Các type khác (Bernoulli, MVS) không bị lỗi.
+
+### 38. XGBoost Callback API & SequentialForecaster Fixes
+**Phát hiện khi chạy tune với XGBoost:**
+1. **`SequentialForecaster._fit_kwargs` XGBoost dùng `callbacks` trong `fit()`** — XGBoost 3.2.0 `XGBRegressor.fit()` không nhận `callbacks` hay `early_stopping_rounds`. Chỉ constructor/`set_params()` hỗ trợ callbacks.
+   - Fix: thêm `_apply_early_stopping()` trong `SequentialForecaster` — gọi `estimator.set_params(callbacks=[...])` trước `fit()` cho XGBoost. LightGBM và CatBoost giữ nguyên (nhận trong `fit()`).
+2. **`XGBoostForecaster.fit()` cũng dùng `early_stopping_rounds` trong `fit()`** — same issue. Fix: chuyển callbacks vào **constructor kwargs** (`rev_kwargs["callbacks"]`).
+3. **`SequentialForecaster.best_iterations()` không support CatBoost** — chỉ check `best_iteration_` / `best_iteration`, bỏ qua `get_best_iteration()` của CatBoost.
+   - Fix: thêm `elif hasattr(model, "get_best_iteration")` cho cả rev và cogs models.
+
+**Validation:**
+- `ruff check src/ tests/` — All passed.
+- `pytest` — 2 passed, 4 skipped.
+- `datathon train --mode evaluate --model-type xgboost` (sequential_cogs=True) — chạy thành công, zero errors:
+  - Revenue MAE: 884,762 vs Naive 1,630,377 (~46% better)
+  - COGS MAE: 772,365 vs Naive 1,295,990 (~40% better)
+
+### 37. Pandas 3.0 Compatibility & NumPy Warnings, Final Polish
+**Phát hiện khi chạy end-to-end evaluate:**
+1. **Pandas chained assignment warnings** — `_backfill_historical_features` dùng `history[col].iloc[0] = np.nan`, gây `FutureWarning` / `SettingWithCopyWarning` trên pandas 2.x và sẽ lỗi trên pandas 3.0 (Copy-on-Write).
+   - Fix: set `np.nan` trên numpy array trước khi assign cả column vào DataFrame.
+2. **`np.nanstd` RuntimeWarning** — guard `len(win) >= 2` không đủ khi array có nhiều NaN (chỉ 1 giá trị hợp lệ). `nanstd` vẫn warning "Degrees of freedom <= 0".
+   - Fix: thay tất cả guards bằng `np.count_nonzero(~np.isnan(win)) >= 2` (revenue, COGS, cogs_ratio rolling std).
+3. **Validation:** `dbt build` 212/212 PASS; `pytest` 2 passed; `ruff` all passed. Evaluate 1-fold 365d chạy clean zero warnings:
+   - Revenue MAE: 1,099,825 vs Naive 1,630,377 (~33% better)
+   - COGS MAE: 925,206 vs Naive 1,295,990 (~29% better)
+
+### 36. Third Deep Review — Compare-Models Workflow, Config Loading, Best-Iteration Propagation
+
+**Workflow audit:** User hỏi workflow sau khi build dbt: tune 3 model → compare-models → done. Kiểm tra logic toàn pipeline.
+
+**Bugs / Limitations fixed:**
+1. **`compare-models` không load per-model tuned config** — Trước đây `compare-models` dùng 1 config duy nhất cho tất cả models. Nếu user tune lightgbm, xgboost, catboost riêng lẻ (3 file delta), `compare-models` bỏ qua tuned params của model không phải winner.
+   - Fix: thêm `merge_model_config()` trong `utils/config.py` — tự động load `configs/tuned/{model_type}.yaml` nếu tồn tại và deep-merge vào base config. `compare-models` giờ mỗi model dùng config riêng.
+2. **`compare-models` train_final không dùng CV best-iteration** — `_run_comparison` chạy CV, nhưng `Trainer` bị discard; phase train_final tạo `Trainer` mới với `_last_cv_best_iters = []`, nên dùng full 5000 trees.
+   - Fix: `_run_comparison` capture `trainer._last_cv_best_iters` và trả về `all_best_iters`. `run()` set `trainer._last_cv_best_iters = all_best_iters[model_type]` trước `train_final()`, enabling best-iteration clipping cho tất cả models.
+3. **`configs/modeling.yaml` thiếu comments giải thích giá trị hợp lệ** — `target_transform` chỉ có giá trị mà không có comment.
+   - Fix: thêm comments cho `target_transform` (identity/residual/log), `cogs_target` (absolute/ratio), `sequential_cogs`, `train_start_date`, `restart_horizon`.
+
+**Logic audit — Không phát hiện bug mới:**
+- Config loading (`_deep_merge`, `resolve_targets`): đúng, overlay chỉ ghi đè keys có trong delta, giữ lại base keys còn lại.
+- Tất cả phép tính trong `recursive.py` (lags, growth ratios, rolling stats, EMA, trend, volatility): consistent giữa SQL và Python, không tính toán sai.
+- SQL ↔ Python feature classification: ~55 columns đều nằm trong đúng 1 trong 4 list (META, CALENDAR, TARGET_DERIVED, PYTHON_ONLY), không bị ffill sai.
+- Restart strategy: `_recursive_forecast_single_pass` trả về `future_slice` đầy đủ columns; append vào history sau mỗi chunk — đúng.
+- Sequential forecaster: `factory.py` truyền `sequential_cogs`, `SequentialForecaster` tạo `predicted_revenue` column dynamically trong `predict()` — không conflict với `cogs_target: ratio`.
+- CLI defaults: `tune.py` default `lightgbm` (consistent với toàn bộ pipeline), `ensemble.py` default model_types lấy từ `list_forecasters()[:3]`.
+- `_load_tet_dates` seed có đủ 2023, 2024 cho forecast period.
+
+### 35. Second Deep Review — Tuner, Recursive, EMA Consistency
+Full review lần 2 trên `tuner.py`, `_backfill_historical_features`, `_prepare_future_frame`, và `forecasters/__init__.py`.
+
+**Bugs fixed:**
+1. **Tuner không dùng `restart_horizon`** — `_make_objective` gọi `recursive_forecast` không truyền `restart_horizon` → tất cả trials đánh giá trên 548 ngày liên tục, không restart. Fix: truyền `restart_horizon` từ config.
+2. **Tuner không dùng `sample_weight`** — `forecaster.fit` thiếu `sample_weight`, inconsistent với `train.py`. Fix: thêm exponential-decay sample weight.
+3. **Tuner không backfill Python-only features** — `_make_objective` tính `feature_columns(df)` trên DataFrame chưa qua `_backfill_historical_features` → EMA/trend/volatility toàn NaN trong training data của mỗi trial. Fix: gọi `_ensure_columns` + `_backfill_historical_features(df)` trước `feature_columns(df)`.
+4. **Tuner `best_iter` lấy fold cuối thay vì max across folds** — `set_user_attr` ghi đè mỗi fold, tuned config dùng iteration của fold cuối. Fix: lưu `max(rev_iter)` và `max(cogs_iter)` across folds.
+5. **Tuner `build_forecaster` thiếu `sequential_cogs`** — truyền `{"models": {...}}` nên `config.get("sequential_cogs")` luôn None. Fix: truyền cả `sequential_cogs` vào dict.
+6. **`_PYTHON_ONLY_FEATURES` bị classify nhầm là exogenous** — `_prepare_future_frame` ffill `ema_*`, `trend_*`, `ewm_vol_*` từ `last_row` vì chúng không nằm trong `_META_COLUMNS`, `CALENDAR_FEATURES`, hay `_TARGET_DERIVED`. Fix: thêm `_PYTHON_ONLY_FEATURES` vào exclusion list của `exogenous_cols`.
+7. **EMA inconsistency history ↔ future** — `_backfill_historical_features` dùng `pandas.ewm(adjust=True)` trong khi `_update_row_features` dùng recursive EMA (`_ema_next`). Công thức khác nhau → historical EMA và future EMA không nhất quán. Fix: rewrite `_backfill_historical_features` để dùng `_ema_next` loop thay vì pandas EWM.
+
+**README updated:** Làm rõ warehouse là DuckDB (không phải SQLite); gọn phần How It Works.
+
+### 34. Deep Review & Critical Bug Fixes (Modeling Pipeline)
+Full review of `recursive.py`, `trainer.py`, all forecaster implementations, and CLI commands revealed 3 significant remaining bugs:
+
+**Bugs fixed:**
+1. **`restart_horizon` never used in production inference** — `recursive.py` had restart strategy implemented but `predict.py`, `ensemble.py`, and `compare_models.py` never passed the parameter. For the 548-day horizon this meant unchecked error accumulation.
+   - Fix: added `restart_horizon: 365` to `configs/modeling.yaml`; plumbed the value through every `recursive_forecast` call in `train.py` (CV), `predict.py`, `compare_models.py`, and `ensemble.py`.
+2. **`train_final` burned the full 5,000-tree ceiling** — `train_final` has no `eval_set`, so it trained all 5,000 iterations regardless of early-stopping results from CV.
+   - Fix: `Trainer.run_cv` now records `fold_forecaster.best_iterations()` in `self._last_cv_best_iters`. `Trainer.train_final` auto-clips `n_estimators` to `max(best_iterations)` when no explicit `n_estimators` is passed, preventing overfit.
+3. **`compare-models` trained finals without sample weights** — `trainer.train_final(df)` was called without `sample_weight=True`, inconsistent with the `train` command.
+   - Fix: added `sample_weight=True` to the `train_final` call inside `compare-models`.
+4. **`EnsembleForecaster.fit` signature mismatch** — did not accept `sample_weight`, violating `BaseForecaster.fit` contract.
+   - Fix: changed signature to `fit(self, X, y_rev, y_cogs, eval_set=None, **kwargs)`.
+5. **Graceful missing-ML-library imports** — `forecasters/__init__.py` unconditionally imported LightGBM, XGBoost, and CatBoost, causing `ModuleNotFoundError` in environments without them.
+   - Fix: wrapped all three imports in `try/except ImportError` so the registry only contains available libraries.
+6. **Tests made robust to missing optional deps** — `tests/test_trainer.py` now conditionally imports forecasters and mocks `_load_tet_dates` so tests pass without DuckDB or any booster library.
+
+**README updated:** Added comprehensive "ML Pipeline" section with quick commands, optimal config table, and architectural explanation of residual targets, ratio-mode COGS, restart strategy, and CV best-iteration clipping.
+
 ### 1. CLI Cleanup & Anti-Duplication
 - **baseline command** (`src/datathon/commands/baseline.py`):
   - `--output-path` is now only accepted (and required) in `--mode submit`. Passing it with `--mode evaluate` raises a `CommandError`.

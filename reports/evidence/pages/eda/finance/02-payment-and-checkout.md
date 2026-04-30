@@ -180,9 +180,11 @@ Every cancelled COD order incurs packing, logistics routing, and return costs wi
     subtitle="COD and bank transfer show highest buyer remorse"
     yAxisTitle="Cancellation Rate"
     yFmt="pct2"
->
-    <ReferenceLine data={cod_cancellation} y=avg_cancellation_rate label="COD Rate" hideValue=true color=negative lineType=dashed/>
-</BarChart>
+/>
+
+<Alert status="info">
+COD cancellation rate: <Value data={cod_cancellation} column=avg_cancellation_rate fmt=pct2/>.
+</Alert>
 
 <LineChart
     data={daily_cancellation}

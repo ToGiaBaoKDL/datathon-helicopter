@@ -350,5 +350,4 @@ by 20–30% in September to cover October–November demand surge.
 ## Related Stories
 
 - [Inventory Capital Trap](/stories/product/01-inventory-capital-trap)
-- [Capital Lock Up](/stories/finance/02-capital-lock-up)
 

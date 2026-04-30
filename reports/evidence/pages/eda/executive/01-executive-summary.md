@@ -314,10 +314,12 @@ Focus on "defective" and "wrong_size" root causes.
     yAxisTitle="Conversion Rate"
     xAxisTitle="Year"
     yFmt="pct2"
->
-    <ReferenceLine data={conversion_peak} y=peak_conversion label="Peak" hideValue=true color=positive lineType=dashed/>
-    <ReferenceLine data={conversion_peak} y=trough_conversion label="Trough" hideValue=true color=negative lineType=dashed/>
-</LineChart>
+/>
+
+<Alert status="info">
+Conversion peaked at <Value data={conversion_peak} column=peak_conversion fmt=pct2/> in <Value data={conversion_peak} column=peak_year/> 
+and troughed at <Value data={conversion_peak} column=trough_conversion fmt=pct2/> in <Value data={conversion_peak} column=trough_year/>.
+</Alert>
 
 <DataTable data={trend_summary} rows=15>
     <Column id=year title="Year" fmt=0/>

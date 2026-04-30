@@ -90,11 +90,19 @@ order by m1_retention desc
 ```
 
 ```sql cohort_matrix
+with latest_cohorts as (
+    select distinct cohort_month
+    from datathon_warehouse.mart_monthly_customer_cohort
+    order by cohort_month desc
+    limit 12
+)
 select
-    strftime(cohort_month, '%Y-%m') as cohort_label,
-    months_since_first_order,
-    round(avg(retention_rate), 4) as retention_rate
-from datathon_warehouse.mart_monthly_customer_cohort
+    strftime(c.cohort_month, '%Y-%m') as cohort_label,
+    c.months_since_first_order,
+    round(avg(c.retention_rate), 4) as retention_rate
+from datathon_warehouse.mart_monthly_customer_cohort c
+join latest_cohorts lc on c.cohort_month = lc.cohort_month
+where c.months_since_first_order <= 6
 group by 1, 2
 order by 1, 2
 ```
@@ -120,6 +128,36 @@ select
     round(revenue_lift_5pp::double / nullif(total_revenue, 0), 4) as pct_lift_5pp,
     round(revenue_lift_10pp::double / nullif(total_revenue, 0), 4) as pct_lift_10pp
 from base
+```
+
+```sql latest_cohort
+select *
+from datathon_warehouse.mart_monthly_customer_cohort
+where months_since_first_order = 0
+order by cohort_month desc
+limit 1
+```
+
+```sql retention_curve_by_channel
+select
+    months_since_first_order,
+    acquisition_channel,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+group by 1, 2
+order by 1, 2
+```
+
+```sql retention_curve_by_age
+select
+    months_since_first_order,
+    age_group,
+    avg(retention_rate) as avg_retention_rate
+from datathon_warehouse.mart_cohort_by_channel_age
+where months_since_first_order <= 12
+group by 1, 2
+order by 1, 2
 ```
 
 ## 1. The Funnel: One and Done
@@ -150,6 +188,34 @@ The entire retention problem is the <b>first 30 days</b> — after that, survivo
     />
 </Grid>
 
+## 1.5. Latest Cohort Snapshot
+
+<Alert status="info">
+The most recent cohort reflects the newest batch of first-time customers.
+Monitor month-0 retention and AOV to spot acquisition quality shifts early.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={latest_cohort}
+        value=cohort_size
+        title="Latest Cohort Size"
+        fmt="0"
+    />
+    <BigValue
+        data={latest_cohort}
+        value=retention_rate
+        fmt="pct2"
+        title="Month-0 Retention"
+    />
+    <BigValue
+        data={latest_cohort}
+        value=avg_order_value
+        fmt="num0"
+        title="Latest Cohort AOV"
+    />
+</Grid>
+
 ## 2. The Curve: A Cliff, Not a Slope
 
 <Alert status="info">
@@ -168,9 +234,13 @@ The battle is won or lost in the first 30 days.
     xAxisTitle="Months Since First Order"
     yFmt="pct2"
 >
-    <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive lineType=dashed/>
-    <ReferenceLine data={retention_m1} y=avg_retention label="Month-1 Actual" hideValue=true color=negative/>
+    <ReferenceLine y=0.10 label="10% Benchmark" hideValue=true color=positive lineType=dashed/>
 </LineChart>
+
+<Alert status="info">
+Average M1 retention across all channels: <b><Value data={retention_m1} column=avg_retention fmt=pct2/></b>.
+Direct leads at <Value data={retention_by_channel} column=m1_retention row=0 fmt=pct2/>; organic search trails at <Value data={retention_by_channel} column=m1_retention row=5 fmt=pct2/>.
+</Alert>
 
 <Alert status="info">
 The heatmap below shows retention rate for each cohort (rows) across months since first order (columns).
@@ -205,8 +275,29 @@ Intent quality, not volume, drives repeat purchase.
     yAxisTitle="Retention Rate"
     yFmt="pct2"
 >
-    <ReferenceLine y=0.20 label="20% Benchmark" hideValue=true color=positive lineType=dashed/>
+    <ReferenceLine y=0.10 label="10% Benchmark" hideValue=true color=positive lineType=dashed/>
 </BarChart>
+
+## 3.5. Retention Curve by Channel: Full Decay
+
+<Alert status="info">
+The full M0–M12 retention curve by channel reveals not just month-1 performance but long-term loyalty.
+Direct customers fade slower than paid search — the gap widens over time.
+</Alert>
+
+<LineChart
+    data={retention_curve_by_channel}
+    x=months_since_first_order
+    y=avg_retention_rate
+    series=acquisition_channel
+    title="Retention Curve by Acquisition Channel"
+    subtitle="Month-0 to month-12 decay by channel"
+    yAxisTitle="Retention Rate"
+    xAxisTitle="Months Since First Order"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.10 label="10% Benchmark" hideValue=true color=positive lineType=dashed/>
+</LineChart>
 
 ## 4. Age Gap: The Largest Segment Is the Weakest
 
@@ -228,6 +319,27 @@ In contrast, 55+ customers show the highest loyalty — likely due to higher int
     yFmt="pct2"
 />
 
+## 4.5. Retention Curve by Age Group: Full Decay
+
+<Alert status="info">
+The full retention curve by age group shows whether the M1 gap persists or closes over time.
+If 55+ customers retain better at M1 and the gap holds, older customers are truly more loyal — not just slower to churn.
+</Alert>
+
+<LineChart
+    data={retention_curve_by_age}
+    x=months_since_first_order
+    y=avg_retention_rate
+    series=age_group
+    title="Retention Curve by Age Group"
+    subtitle="Month-0 to month-12 decay by age"
+    yAxisTitle="Retention Rate"
+    xAxisTitle="Months Since First Order"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.10 label="10% Benchmark" hideValue=true color=positive lineType=dashed/>
+</LineChart>
+
 ## 5. What-If: Closing the Retention Gap
 
 <Alert status="info">
@@ -243,7 +355,7 @@ A 10-point lift doubles the impact to <Value data={what_if_retention} column=rev
     <BigValue
         data={what_if_retention}
         value=single_order_customers
-        title="Single-Order Customers"
+        title="Base: Single-Order Customers"
         fmt="num0"
     />
     <BigValue

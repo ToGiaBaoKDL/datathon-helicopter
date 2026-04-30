@@ -143,6 +143,17 @@ select
 from pct, fxd
 ```
 
+```sql category_aov
+select
+    coalesce(applicable_category, 'All Categories') as category_scope,
+    promo_type,
+    cast(sum(total_net_revenue) as double) / nullif(sum(total_orders), 0) as avg_aov
+from datathon_warehouse.mart_promotion_effectiveness
+where total_orders > 0
+group by 1, 2
+order by category_scope, promo_type
+```
+
 ## 1. The Trade-off: Scale vs Efficiency
 
 <Alert status="info">
@@ -193,7 +204,7 @@ Top-left = shallow discount + high revenue = efficient winners. Bottom-right = d
     xFmt="pct2"
     yFmt="num0"
 >
-    <ReferenceLine x=0.20 label="20% Threshold" hideValue=true color=warning lineType=dashed/>
+    <ReferenceLine x=0.15 label="15% Threshold" hideValue=true color=warning lineType=dashed/>
 </BubbleChart>
 
 <Alert status="info">
@@ -246,9 +257,29 @@ Bottom-right = deep discount, poor return — margin destroyers.
     xFmt="pct2"
     yFmt="0.0"
 >
-    <ReferenceLine x=0.20 label="20% Threshold" hideValue=true color=warning lineType=dashed/>
+    <ReferenceLine x=0.15 label="15% Threshold" hideValue=true color=warning lineType=dashed/>
     <ReferenceLine y=5 label="5× ROI" hideValue=true color=positive lineType=dashed/>
 </ScatterPlot>
+
+## 3.5. Average Order Value by Category Scope
+
+<Alert status="info">
+AOV varies by category scope and promo type. Streetwear fixed discounts average <Value data={category_aov} column=avg_aov row=2 fmt=num0/> VND per order,
+while Outdoor percentage campaigns average <Value data={category_aov} column=avg_aov row=1 fmt=num0/> VND.
+Site-wide percentage promos sit at <Value data={category_aov} column=avg_aov row=0 fmt=num0/> VND.
+These differences reflect category price points more than promo design.
+</Alert>
+
+<BarChart
+    data={category_aov}
+    x=category_scope
+    y=avg_aov
+    series=promo_type
+    title="Average Order Value by Category Scope"
+    subtitle="Category-restricted promos may drive higher basket sizes"
+    yAxisTitle="AOV (VND)"
+    yFmt="num0"
+/>
 
 ## 4. Channel: Where Promo Dollars Work Hardest
 

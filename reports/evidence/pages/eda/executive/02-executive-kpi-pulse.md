@@ -290,14 +290,15 @@ is the recovery opportunity.
     y=value
     series=metric
     title="Daily Revenue"
-    subtitle="Daily revenue with mean and peak reference lines"
+    subtitle="Daily revenue trend"
     xAxisTitle="Date"
     yAxisTitle="Revenue"
     yFmt="num0"
->
-    <ReferenceLine data={mean_revenue} y=mean_revenue label="Avg" hideValue=true color=info/>
-    <ReferenceLine data={peak_revenue} y=peak_revenue label="Peak" hideValue=true color=positive opacity=0.5/>
-</AreaChart>
+/>
+
+<Alert status="info">
+Daily revenue averages <Value data={mean_revenue} column=mean_revenue fmt=num0/> VND, peaking at <Value data={peak_revenue} column=peak_revenue fmt=num0/> VND in the selected period.
+</Alert>
 
 ## Daily Order Count
 
@@ -321,9 +322,11 @@ where sales_date between '${inputs.date_range.start}' and '${inputs.date_range.e
     xAxisTitle="Date"
     yAxisTitle="Orders"
     yFmt="0"
->
-    <ReferenceLine data={mean_orders} y=mean_orders label="Avg" hideValue=true color=info/>
-</AreaChart>
+/>
+
+<Alert status="info">
+Daily orders average <Value data={mean_orders} column=mean_orders fmt=0/> in the selected period.
+</Alert>
 
 ## Revenue Trend (Rolling Average)
 
@@ -426,9 +429,11 @@ Reduce weekend ad spend if traffic does not convert.
     subtitle="Wednesday peaks; weekend underperforms"
     yAxisTitle="Conversion Rate"
     yFmt="pct2"
->
-    <ReferenceLine data={mean_conversion} y=mean_conversion label="Avg" hideValue=true color=info/>
-</BarChart>
+/>
+
+<Alert status="info">
+Average conversion in the selected period is <Value data={mean_conversion} column=mean_conversion fmt=pct2/>.
+</Alert>
 
 <CalendarHeatmap
     data={conversion_calendar}
@@ -510,9 +515,11 @@ Some months consistently outperform others due to cultural events or weather-dri
     yAxisTitle="Revenue"
     xAxisTitle="Month"
     yFmt="num0"
->
-    <ReferenceLine data={mean_revenue} y=mean_revenue label="Avg" hideValue=true color=info/>
-</BarChart>
+/>
+
+<Alert status="info">
+Average daily revenue across all months is <Value data={mean_revenue} column=mean_revenue fmt=num0/> VND.
+</Alert>
 
 ## Month-End Effect
 
@@ -529,9 +536,11 @@ This is consistent with salary-cycle purchasing behavior in emerging markets.
     subtitle="Salary-cycle effect on daily revenue"
     yAxisTitle="Revenue"
     yFmt="num0"
->
-    <ReferenceLine data={mean_revenue} y=mean_revenue label="Avg" hideValue=true color=info/>
-</BarChart>
+/>
+
+<Alert status="info">
+Overall average daily revenue is <Value data={mean_revenue} column=mean_revenue fmt=num0/> VND.
+</Alert>
 
 ## Quarterly Summary
 

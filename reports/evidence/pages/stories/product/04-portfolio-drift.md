@@ -41,19 +41,21 @@ where category = 'GenZ'
 select
     month_start_date,
     category,
-    gross_revenue,
-    gross_margin_rate
+    round(sum(gross_revenue), 0) as gross_revenue,
+    round(sum(gross_profit)::double / nullif(sum(gross_revenue), 0), 4) as gross_margin_rate
 from datathon_warehouse.mart_monthly_category_performance
-order by month_start_date, category
+group by 1, 2
+order by 1, 2
 ```
 
 ```sql monthly_return_trend
 select
     month_start_date,
     category,
-    return_unit_rate
+    round(sum(return_units)::double / nullif(sum(sold_units), 0), 4) as return_unit_rate
 from datathon_warehouse.mart_monthly_category_performance
-order by month_start_date, category
+group by 1, 2
+order by 1, 2
 ```
 
 ```sql margin_lift_value
@@ -64,12 +66,50 @@ from datathon_warehouse.mart_monthly_category_performance
 where category = 'Streetwear'
 ```
 
+```sql top_revenue_products
+select
+    product_name,
+    category,
+    round(total_revenue, 0) as total_revenue,
+    round(realized_margin_rate, 4) as realized_margin_rate,
+    round(return_unit_rate, 4) as return_unit_rate,
+    round(revenue_share_in_category, 4) as revenue_share_in_category,
+    lifecycle_stage
+from datathon_warehouse.mart_product_lifetime_performance
+where lifecycle_stage != 'never_sold'
+  and total_revenue > 0
+order by total_revenue desc
+limit 10
+```
+
+```sql top_products_concentration
+with top10 as (
+    select total_revenue
+    from datathon_warehouse.mart_product_lifetime_performance
+    where lifecycle_stage != 'never_sold'
+    order by total_revenue desc
+    limit 10
+)
+select
+    round(sum(t.total_revenue), 0) as top10_revenue,
+    round(sum(t.total_revenue) / (select sum(total_revenue) from datathon_warehouse.mart_product_lifetime_performance where lifecycle_stage != 'never_sold'), 4) as top10_share
+from top10 t
+```
+
 ```sql category_share_trend
+with monthly as (
+    select
+        month_start_date,
+        category,
+        sum(gross_revenue) as gross_revenue
+    from datathon_warehouse.mart_monthly_category_performance
+    group by 1, 2
+)
 select
     month_start_date,
     category,
     round(gross_revenue::double / sum(gross_revenue) over (partition by month_start_date), 4) as revenue_share
-from datathon_warehouse.mart_monthly_category_performance
+from monthly
 order by month_start_date, category
 ```
 
@@ -114,6 +154,24 @@ GenZ and Casual are high-margin but tiny. The portfolio is heavily skewed toward
     yAxisTitle="Revenue (VND)"
     yFmt="num0"
 />
+
+## 1.5. Revenue Concentration: The Top 10 Products
+
+<Alert status="info">
+The top 10 products generate <b><Value data={top_products_concentration} column=top10_share fmt=pct2/></b> of total sold-product revenue. 
+If these products face stockout or quality issues, the revenue impact is disproportionate. 
+Monitor margin and return rate of top sellers closely.
+</Alert>
+
+<DataTable data={top_revenue_products} rows=10>
+    <Column id=product_name title="Product"/>
+    <Column id=category title="Category"/>
+    <Column id=total_revenue title="Revenue" fmt=num0/>
+    <Column id=realized_margin_rate title="Margin" fmt=pct2/>
+    <Column id=return_unit_rate title="Return Rate" fmt=pct2/>
+    <Column id=revenue_share_in_category title="Category Share" fmt=pct2/>
+    <Column id=lifecycle_stage title="Lifecycle"/>
+</DataTable>
 
 ## 2. Category Margin: The Inverse Relationship
 

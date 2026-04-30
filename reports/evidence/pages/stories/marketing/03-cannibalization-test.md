@@ -109,19 +109,19 @@ The aggregate mask hides a critical split. <b>Fixed</b> discounts show a post-pe
     yFmt="num0"
 />
 
-## 3. Fixed-Promo Math: During Lift vs Post Drop
+## 3. Fixed-Promo Math: During Change vs Post Drop
 
 <Alert status="info">
-Fixed promos: during-period revenue changes by <b><Value data={fixed_lift_drop} column=during_lift fmt=pct2/></b> vs pre. 
-Post-period drops by <b><Value data={fixed_lift_drop} column=post_drop fmt=pct2/></b> vs pre. 
-The post collapse means customers bought <b>earlier</b> — not <b>more</b>.
+Fixed promos: during-period revenue <b>falls <Value data={fixed_lift_drop} column=during_lift fmt=pct2/></b> vs pre.
+Post-period drops by <b><Value data={fixed_lift_drop} column=post_drop fmt=pct2/></b> vs pre.
+Revenue declines in both windows — the promo does not create demand, it only shifts timing.
 </Alert>
 
 <Grid cols=2>
     <BigValue
         data={fixed_lift_drop}
         value=during_lift
-        title="Fixed: During Lift vs Pre"
+        title="Fixed: During Change vs Pre"
         fmt="pct2"
     />
     <BigValue

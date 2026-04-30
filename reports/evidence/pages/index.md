@@ -60,7 +60,6 @@ This Evidence app is connected to the same DuckDB warehouse used by dbt and ML s
 
 ### Business Stories — Finance
 - [01 The Revenue Anatomy](./stories/finance/01-revenue-anatomy)
-- [02 The Capital Lock-Up](./stories/finance/02-capital-lock-up)
 
 ### Appendix
 - [01 Forecast Feature Health](./eda/appendix/01-forecast-feature-health)

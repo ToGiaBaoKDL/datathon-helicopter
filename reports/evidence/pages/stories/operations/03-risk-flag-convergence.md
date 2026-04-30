@@ -75,6 +75,26 @@ group by 1
 order by 1
 ```
 
+```sql what_if_risk_reduction
+with compound as (
+    select avg(revenue) as compound_revenue, count(*) as compound_days
+    from datathon_warehouse.mart_daily_risk_flags
+    where stockout_risk_flag + return_spike_flag + conversion_drop_flag >= 2
+),
+normal as (
+    select avg(revenue) as normal_revenue
+    from datathon_warehouse.mart_daily_risk_flags
+    where stockout_risk_flag + return_spike_flag + conversion_drop_flag < 2
+)
+select
+    round(c.compound_revenue, 0) as compound_revenue,
+    round(n.normal_revenue, 0) as normal_revenue,
+    c.compound_days,
+    round(n.normal_revenue - c.compound_revenue, 0) as daily_revenue_gap,
+    round(daily_revenue_gap * c.compound_days * 0.5, 0) as half_reduction_lift
+from compound c, normal n
+```
+
 ## 1. The Baseline: How Often Each Flag Fires
 
 <Alert status="info">
@@ -156,6 +176,37 @@ but remains structurally present. This is not a one-off anomaly — it is a buil
     yAxisTitle="Compound Risk Rate"
     yFmt="pct2"
 />
+
+## 5. What-If: Halving Compound-Risk Days
+
+<Alert status="info">
+On compound-risk days (2+ flags), revenue averages <b><Value data={what_if_risk_reduction} column=compound_revenue fmt=num0/></b> VND.
+On normal days: <b><Value data={what_if_risk_reduction} column=normal_revenue fmt=num0/></b> VND —
+a gap of <b><Value data={what_if_risk_reduction} column=daily_revenue_gap fmt=num0/></b> VND per day.
+There are <Value data={what_if_risk_reduction} column=compound_days fmt=0/> compound-risk days in total.
+If operational improvements halve these days, the revenue protected is <b><Value data={what_if_risk_reduction} column=half_reduction_lift fmt=num0/></b> VND.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_risk_reduction}
+        value=compound_revenue
+        title="Compound-Day Revenue"
+        fmt="num0"
+    />
+    <BigValue
+        data={what_if_risk_reduction}
+        value=normal_revenue
+        title="Normal-Day Revenue"
+        fmt="num0"
+    />
+    <BigValue
+        data={what_if_risk_reduction}
+        value=half_reduction_lift
+        title="Revenue Protected (50% Cut)"
+        fmt="num0"
+    />
+</Grid>
 
 ## The Verdict
 

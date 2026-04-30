@@ -190,6 +190,33 @@ Platinum customers contribute the largest share despite being only 25% of the ba
     yFmt="num0"
 />
 
+## 2.5. CLV Tier Distribution
+
+<Alert status="info">
+CLV tiers follow a classic Pareto pattern. Platinum (top 25%) generates the majority of revenue
+while Bronze (bottom 25%) contributes minimally. The donut visualises this concentration.
+</Alert>
+
+<ECharts config={
+    {
+        title: {
+            text: 'CLV Tier Revenue Share',
+            subtext: 'Platinum dominates — classic Pareto concentration',
+            left: 'center'
+        },
+        tooltip: {
+            formatter: '{b}: {c} ({d}%)'
+        },
+        series: [
+            {
+                type: 'pie',
+                radius: ['40%', '70%'],
+                data: [...clv_donut],
+            }
+        ]
+    }
+}/>
+
 ## 3. RFM Segments: Where the Customers Live
 
 <Alert status="info">
@@ -201,6 +228,7 @@ Champions and Loyal customers are the core. At Risk and Hibernating represent sl
     data={rfm_segment_summary}
     x=rfm_segment
     y=customer_count
+    swapXY=true
     title="Customer Count by RFM Segment"
     subtitle="Champions and Hibernating are the largest segments"
     yAxisTitle="Customers"
@@ -211,6 +239,7 @@ Champions and Loyal customers are the core. At Risk and Hibernating represent sl
     data={rfm_segment_summary}
     x=rfm_segment
     y=avg_revenue
+    swapXY=true
     title="Average Revenue per Segment"
     subtitle="Cannot Lose Them and Champions have the highest per-customer value"
     yAxisTitle="Avg Revenue (VND)"
@@ -247,6 +276,80 @@ Win-back campaigns here have high expected ROI.
     />
 </Grid>
 
+## 4.5. Churn Risk Segments
+
+<Alert status="info">
+<Value data={churn_risk_total} column=churned_customers fmt=0/> customers are "Churned" — no order in 2× their normal gap.
+<Value data={churn_risk_total} column=single_order_customers fmt=0/> are "Single Order" — never returned after first purchase.
+These are distinct problems requiring different tactics.
+</Alert>
+
+<Grid cols=4>
+    <BigValue
+        data={churn_risk_total}
+        value=active_customers
+        title="Active Customers"
+        fmt="0"
+    />
+    <BigValue
+        data={churn_risk_total}
+        value=at_risk_customers
+        title="At Risk Customers"
+        fmt="0"
+    />
+    <BigValue
+        data={churn_risk_total}
+        value=churned_customers
+        title="Churned Customers"
+        fmt="0"
+    />
+    <BigValue
+        data={churn_risk_total}
+        value=single_order_customers
+        title="Single-Order Customers"
+        fmt="0"
+    />
+</Grid>
+
+<BarChart
+    data={churn_risk}
+    x=churn_risk
+    y=customers
+    swapXY=true
+    title="Customer Count by Churn Risk"
+    subtitle="Based on recency vs historical ordering gap"
+    yAxisTitle="Customers"
+    yFmt="0"
+/>
+
+<BarChart
+    data={churn_risk}
+    x=churn_risk
+    y=avg_revenue
+    swapXY=true
+    title="Average Lifetime Revenue by Churn Risk"
+    subtitle="Revenue at stake in each segment"
+    yAxisTitle="Avg Revenue (VND)"
+    yFmt="num0"
+/>
+
+## 4.6. Top Customers by Revenue
+
+<Alert status="info">
+The highest-value customers deserve VIP treatment. Monitor their recency and purchase frequency
+to prevent churn at the top of the revenue pyramid.
+</Alert>
+
+<DataTable data={top_customers} rows=10>
+    <Column id=customer_id title="Customer"/>
+    <Column id=acquisition_channel title="Channel"/>
+    <Column id=age_group title="Age"/>
+    <Column id=total_orders title="Orders" fmt=0/>
+    <Column id=total_revenue title="Revenue" fmt=num0/>
+    <Column id=recency_days title="Recency" fmt=0/>
+    <Column id=avg_gap title="Avg Gap" fmt=0/>
+</DataTable>
+
 ## 5. Channel of Champions vs Hibernating
 
 <Alert status="info">
@@ -282,6 +385,53 @@ select
 from datathon_warehouse.mart_rfm_segments
 group by 1, 2
 order by 1, 2
+```
+
+```sql clv_donut
+select
+    tier as name,
+    round(tier_revenue::double / sum(tier_revenue) over (), 4) as value
+from ${clv_tiers}
+```
+
+```sql churn_risk_total
+select
+    sum(case when recency_days > 2 * avg_days_between_orders then 1 else 0 end) as churned_customers,
+    sum(case when avg_days_between_orders is null then 1 else 0 end) as single_order_customers,
+    sum(case when recency_days <= avg_days_between_orders then 1 else 0 end) as active_customers,
+    sum(case when avg_days_between_orders is not null and recency_days > avg_days_between_orders and recency_days <= 2 * avg_days_between_orders then 1 else 0 end) as at_risk_customers,
+    count(*) as total_customers
+from datathon_warehouse.mart_customer_rfm
+```
+
+```sql churn_risk
+select
+    case
+        when avg_days_between_orders is null then 'Single Order'
+        when recency_days <= avg_days_between_orders then 'Active'
+        when recency_days <= 2 * avg_days_between_orders then 'At Risk'
+        else 'Churned'
+    end as churn_risk,
+    count(*) as customers,
+    avg(total_revenue) as avg_revenue,
+    avg(recency_days) as avg_recency
+from datathon_warehouse.mart_customer_rfm
+group by churn_risk
+order by avg_recency
+```
+
+```sql top_customers
+select
+    customer_id,
+    acquisition_channel,
+    age_group,
+    total_orders,
+    total_revenue,
+    recency_days,
+    avg_days_between_orders as avg_gap
+from datathon_warehouse.mart_customer_rfm
+order by total_revenue desc
+limit 10
 ```
 
 ## 6. Recency: How Recently Did They Buy?
@@ -326,6 +476,40 @@ The Organic Paradox is visible: organic search produces both Champions (high-val
     subtitle="Customer count heatmap — reveals channel-quality patterns"
     valueFmt="0"
 />
+
+## 6. What-If: Win Back 10% of At-Risk Customers
+
+<Alert status="info">
+At Risk customers generated <b><Value data={at_risk_value} column=at_risk_revenue fmt=num0/></b> VND in lifetime revenue
+(<Value data={at_risk_value} column=at_risk_customers fmt=0/> customers).
+If a win-back campaign recovers 10% of them,
+that is <b><Value data={what_if_winback} column=recovered_customers fmt=0/></b> customers recovered
+and <b><Value data={what_if_winback} column=recovered_revenue fmt=num0/></b> VND in lifetime value protected.
+</Alert>
+
+```sql what_if_winback
+select
+    round(count(*) * 0.10, 0) as recovered_customers,
+    round(avg(total_revenue) * count(*) * 0.10, 0) as recovered_revenue
+from datathon_warehouse.mart_customer_rfm
+where recency_days > avg_days_between_orders
+  and recency_days <= 2 * avg_days_between_orders
+```
+
+<Grid cols=2>
+    <BigValue
+        data={what_if_winback}
+        value=recovered_customers
+        title="Recovered Customers (10%)"
+        fmt="0"
+    />
+    <BigValue
+        data={what_if_winback}
+        value=recovered_revenue
+        title="Recovered Revenue"
+        fmt="num0"
+    />
+</Grid>
 
 ## The Verdict
 

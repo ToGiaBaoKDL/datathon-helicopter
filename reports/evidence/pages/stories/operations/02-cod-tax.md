@@ -56,11 +56,20 @@ where payment_method != 'unknown'
 ```
 
 ```sql what_if_shift
+with base as (
+    select
+        round(sum(case when payment_method = 'cod' then order_count else 0 end) * 0.10, 0) as shifted_orders,
+        round(sum(case when payment_method = 'cod' then order_count else 0 end) * 0.10 * ((select cod_cancel_rate from ${cod_rate}) - (select prepaid_cancel_rate from ${prepaid_rate})), 0) as saved_orders,
+        round(sum(case when payment_method = 'cod' then revenue else 0 end) / nullif(sum(case when payment_method = 'cod' then order_count else 0 end), 0), 0) as cod_aov
+    from datathon_warehouse.mart_daily_payment_checkout_kpis
+    where payment_method != 'unknown'
+)
 select
-    round(sum(case when payment_method = 'cod' then order_count else 0 end) * 0.10, 0) as shifted_orders,
-    round(sum(case when payment_method = 'cod' then order_count else 0 end) * 0.10 * ((select cod_cancel_rate from ${cod_rate}) - (select prepaid_cancel_rate from ${prepaid_rate})), 0) as saved_orders
-from datathon_warehouse.mart_daily_payment_checkout_kpis
-where payment_method != 'unknown'
+    shifted_orders,
+    saved_orders,
+    cod_aov,
+    round(saved_orders * cod_aov, 0) as saved_revenue
+from base
 ```
 
 ```sql cod_cancel_ratio
@@ -157,12 +166,13 @@ The COD cancellation premium is persistent across time. It is not a seasonal spi
 ## 4. What-If: Shift 10% COD → Prepaid
 
 <Alert status="info">
-If <b>10%</b> of COD orders shifted to prepaid, <b><Value data={what_if_shift} column=saved_orders fmt=0/></b> orders would be saved from cancellation. 
-At current AOV, that is substantial recovered revenue with zero marketing spend. 
+If <b>10%</b> of COD orders shifted to prepaid, <b><Value data={what_if_shift} column=saved_orders fmt=0/></b> orders would be saved from cancellation.
+At an average COD AOV of <Value data={what_if_shift} column=cod_aov fmt=num0/> VND,
+that is <b><Value data={what_if_shift} column=saved_revenue fmt=num0/></b> VND in recovered revenue with zero marketing spend.
 Caveat: shifted COD users may not instantly match prepaid cancellation rates due to self-selection bias (higher-trust customers already choose prepaid).
 </Alert>
 
-<Grid cols=2>
+<Grid cols=3>
     <BigValue
         data={what_if_shift}
         value=shifted_orders
@@ -174,6 +184,12 @@ Caveat: shifted COD users may not instantly match prepaid cancellation rates due
         value=saved_orders
         title="Orders Saved from Cancel"
         fmt="0"
+    />
+    <BigValue
+        data={what_if_shift}
+        value=saved_revenue
+        title="Recovered Revenue (VND)"
+        fmt="num0"
     />
 </Grid>
 

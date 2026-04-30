@@ -237,9 +237,7 @@ This is not gradual decline; it's a regime change. The cause: conversion collaps
     title="Daily Revenue, COGS, and Gross Profit"
     subtitle="Top-line scale, direct cost, and margin dollars over time"
     yFmt="num0"
->
-    <ReferenceArea data={anomaly_bounds} yMin=lower_bound yMax=upper_bound color=gray opacity=0.1/>
-</AreaChart>
+/>
 
 ## Anomaly Detection
 
@@ -295,9 +293,11 @@ Sustained increases suggest root causes in fulfillment, sizing, or defects.
     title="Daily Return Units"
     subtitle="Quality signal from return volume"
     yFmt="num0"
->
-    <ReferenceLine data={mean_return_units} y=mean_return_units label="Avg" hideValue=true color=info/>
-</LineChart>
+/>
+
+<Alert status="info">
+Average daily return units: <Value data={mean_return_units} column=mean_return_units fmt=0/>.
+</Alert>
 
 ## Discount Pressure
 
@@ -316,9 +316,11 @@ into whether the lift justifies the margin sacrifice.
     title="Daily Discount Amount"
     subtitle="Promotional spend trend"
     yFmt="num0"
->
-    <ReferenceLine data={mean_discount} y=mean_discount label="Avg" hideValue=true color=info/>
-</AreaChart>
+/>
+
+<Alert status="info">
+Average daily discount amount: <Value data={mean_discount} column=mean_discount fmt=num0/> VND.
+</Alert>
 
 ## Revenue Pattern by Day of Week
 
@@ -337,9 +339,11 @@ Action: Reallocate weekend ad spend to Tuesday–Wednesday to capture peak deman
     subtitle="Reveals intra-week trading patterns"
     yAxisTitle="Avg Revenue"
     yFmt="num0"
->
-    <ReferenceLine data={mean_revenue_dow} y=mean_revenue label="Avg" hideValue=true color=info/>
-</BarChart>
+/>
+
+<Alert status="info">
+Average daily revenue across all days: <Value data={mean_revenue_dow} column=mean_revenue fmt=num0/> VND.
+</Alert>
 
 ## Daily Revenue Calendar
 

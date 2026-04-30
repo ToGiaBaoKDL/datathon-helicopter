@@ -76,6 +76,31 @@ from datathon_warehouse.mart_forecast_daily_base
 group by 1
 ```
 
+```sql what_if_budget_shift
+with annual as (
+    select sum(revenue) as annual_revenue
+    from datathon_warehouse.mart_forecast_daily_base
+),
+q4 as (
+    select sum(revenue) as q4_revenue
+    from datathon_warehouse.mart_forecast_daily_base
+    where date_part('month', sales_date) in (10, 11, 12)
+),
+peak as (
+    select sum(revenue) as peak_revenue
+    from datathon_warehouse.mart_forecast_daily_base
+    where date_part('month', sales_date) in (4, 5)
+)
+select
+    a.annual_revenue,
+    q.q4_revenue,
+    p.peak_revenue,
+    round(q.q4_revenue * 0.20, 0) as shifted_budget,
+    round(p.peak_revenue / nullif(q.q4_revenue, 0), 2) as peak_to_q4_ratio,
+    round(shifted_budget * (peak_to_q4_ratio - 1), 0) as projected_lift
+from annual a, q4 q, peak p
+```
+
 ## 1. The Pattern: April–May Peak, Q4 Trough
 
 <Alert status="info">
@@ -147,7 +172,41 @@ Orders cluster around mid-week and month-end paycheck timing.
     yFmt="num0"
 />
 
-## 4. Month-End Effect: Paycheck Spike
+## 4. What-If: Shift 20% of Q4 Budget to Apr–May
+
+<Alert status="info">
+Q4 revenue is <b><Value data={what_if_budget_shift} column=q4_revenue fmt=num0/></b> VND annually.
+Apr–May revenue is <b><Value data={what_if_budget_shift} column=peak_revenue fmt=num0/></b> VND — 
+<Value data={what_if_budget_shift} column=peak_to_q4_ratio fmt=0.00/>× the Q4 level.
+If 20% of Q4 marketing budget (<Value data={what_if_budget_shift} column=shifted_budget fmt=num0/> VND equivalent) 
+were reallocated to Apr–May where the seasonal index is higher,
+projected revenue lift is <b><Value data={what_if_budget_shift} column=projected_lift fmt=num0/></b> VND annually.
+<b>Caveat:</b> This assumes each marketing VND delivers the same return in peak months as in trough months.
+In reality, peak-month competition may raise CAC, so the true lift is likely lower — treat this as an upper bound.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_budget_shift}
+        value=q4_revenue
+        title="Q4 Annual Revenue"
+        fmt="num0"
+    />
+    <BigValue
+        data={what_if_budget_shift}
+        value=peak_revenue
+        title="Apr–May Annual Revenue"
+        fmt="num0"
+    />
+    <BigValue
+        data={what_if_budget_shift}
+        value=projected_lift
+        title="Projected Annual Lift"
+        fmt="num0"
+    />
+</Grid>
+
+## 5. Month-End Effect: Paycheck Spike
 
 <Alert status="info">
 Month-end days (29–31) generate substantially more revenue than other days. 

@@ -15,7 +15,9 @@ select
     round(return_unit_rate, 4) as return_unit_rate,
     round(avg_days_to_deliver, 1) as avg_days_to_deliver,
     round(avg_shipping_fee, 2) as avg_shipping_fee,
-    total_orders
+    total_orders,
+    total_customers,
+    round(free_shipping_share, 4) as free_shipping_share
 from datathon_warehouse.mart_region_fulfillment_profile
 order by total_revenue desc
 ```
@@ -113,6 +115,54 @@ select
 from west w, east e
 ```
 
+```sql weekly_region_revenue
+select
+    week_start_date,
+    region,
+    gross_revenue
+from datathon_warehouse.mart_weekly_region_performance
+order by week_start_date, region
+```
+
+```sql weekly_region_customers
+select
+    week_start_date,
+    region,
+    active_customer_count
+from datathon_warehouse.mart_weekly_region_performance
+order by week_start_date, region
+```
+
+```sql top_cities
+select
+    city,
+    region,
+    orders,
+    customers,
+    revenue
+from datathon_warehouse.mart_top_cities
+order by revenue desc
+limit 10
+```
+
+```sql west_margin
+select
+    round(gross_margin_rate, 4) as west_margin_rate,
+    region
+from datathon_warehouse.mart_region_fulfillment_profile
+where region = 'West'
+```
+
+```sql margin_rank
+select
+    region,
+    round(gross_margin_rate, 4) as margin_rate,
+    rank() over (order by gross_margin_rate desc) as margin_rank
+from datathon_warehouse.mart_region_fulfillment_profile
+order by margin_rate desc
+limit 1
+```
+
 ## 1. Revenue Map: East Dominates
 
 <Alert status="info">
@@ -129,6 +179,35 @@ The puzzle: why does the smallest region return the most?
     subtitle="East is the revenue engine; West is the smallest"
     yAxisTitle="Revenue (VND)"
     yFmt="num0"
+/>
+
+## 1.5. Regional Profitability and Customer Base
+
+<Alert status="info">
+West has the <b>highest gross margin rate</b> (<Value data={west_margin} column=west_margin_rate fmt=pct2/>) among all regions — ranked #<Value data={margin_rank} column=margin_rank fmt=0/> — despite having the lowest revenue.
+This suggests West's problem is not pricing power — it is volume and retention.
+</Alert>
+
+<BarChart
+    data={region_profile}
+    x=region
+    y=gross_margin_rate
+    title="Gross Margin Rate by Region"
+    subtitle="West is the most profitable per dollar of revenue"
+    yAxisTitle="Gross Margin Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.15 label="15% Target" hideValue=true color=positive lineType=dashed/>
+</BarChart>
+
+<BarChart
+    data={region_profile}
+    x=region
+    y=total_customers
+    title="Active Customers by Region"
+    subtitle="Customer base size reveals market penetration gaps"
+    yAxisTitle="Customers"
+    yFmt="0"
 />
 
 ## 2. Fulfillment Cost: Uniform Across Regions
@@ -160,6 +239,25 @@ This rules out logistics cost as the cause of West's underperformance. The issue
     <ReferenceLine y=7 label="7-Day SLA" hideValue=true color=negative lineType=dashed/>
 </BarChart>
 
+## 2.5. Free Shipping Penetration: A Missed Conversion Lever
+
+<Alert status="warning">
+Free shipping penetration is near zero across all regions (<Value data={region_profile} column=free_shipping_share row=0 fmt=pct2/>). 
+With average shipping fees already minimal, offering free shipping could remove psychological checkout friction without materially increasing cost.
+</Alert>
+
+<BarChart
+    data={region_profile}
+    x=region
+    y=free_shipping_share
+    title="Free Shipping Share by Region"
+    subtitle="Near-zero penetration suggests an untapped conversion tactic"
+    yAxisTitle="Free Shipping Share"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.05 label="5% Benchmark" hideValue=true color=positive lineType=dashed/>
+</BarChart>
+
 ## 3. Return Rate: West Is the Outlier
 
 <Alert status="info">
@@ -176,7 +274,7 @@ East and Central are lower. Since logistics are uniform, the cause is likely pro
     yAxisTitle="Return Unit Rate"
     yFmt="pct2"
 >
-    <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
+    <ReferenceLine y=0.035 label="3.5% Alert" hideValue=true color=negative lineType=dashed/>
 </BarChart>
 
 ## 4. Category Mix: What Each Region Buys
@@ -218,6 +316,68 @@ the geographic puzzle is solved — it is a product-mix issue, not a regional lo
     <Column id=sku_count title="SKUs" fmt=0/>
     <Column id=total_revenue title="Revenue" fmt=num0/>
 </DataTable>
+
+## 4.5. Region × Category Heatmap
+
+<Alert status="info">
+This matrix reveals whether certain categories dominate specific regions. 
+A strong diagonal suggests localized demand — an opportunity for region-specific campaigns. 
+A flat matrix means demand is homogeneous and site-wide promos work fine.
+</Alert>
+
+<Heatmap
+    data={region_category_matrix}
+    x=category
+    y=region
+    value=revenue
+    title="Revenue by Region and Category"
+    subtitle="Regional category preference intensity"
+    valueFmt="num0"
+/>
+
+## 4.6. Top Cities: Operational Drill-Down
+
+<Alert status="info">
+City-level detail within regions reveals where the highest-value customers are concentrated. 
+Top cities are candidates for same-day delivery pilots, local influencer partnerships, and offline pop-up stores.
+</Alert>
+
+<DataTable data={top_cities} rows=10>
+    <Column id=city title="City"/>
+    <Column id=region title="Region"/>
+    <Column id=orders title="Orders" fmt=0/>
+    <Column id=customers title="Customers" fmt=0/>
+    <Column id=revenue title="Revenue" fmt=num0/>
+</DataTable>
+
+## 4.7. Weekly Trajectory: Revenue and Customer Growth
+
+<Alert status="info">
+Weekly trends reveal whether regions are growing or declining over time. 
+If revenue declines while active customers remain stable, the issue is AOV erosion — a pricing problem, not a demand problem.
+</Alert>
+
+<LineChart
+    data={weekly_region_revenue}
+    x=week_start_date
+    y=gross_revenue
+    series=region
+    title="Weekly Revenue by Region"
+    subtitle="Geographic revenue trajectory over time"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
+/>
+
+<LineChart
+    data={weekly_region_customers}
+    x=week_start_date
+    y=active_customer_count
+    series=region
+    title="Weekly Active Customers by Region"
+    subtitle="Customer base growth by geography"
+    yAxisTitle="Active Customers"
+    yFmt="0"
+/>
 
 ## 5. What-If: West Returns at East Level
 

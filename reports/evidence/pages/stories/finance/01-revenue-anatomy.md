@@ -147,6 +147,88 @@ from datathon_warehouse.mart_daily_executive_kpis
 order by sales_date
 ```
 
+```sql anomaly_detection
+with stats as (
+    select
+        avg(revenue) as mean_revenue,
+        stddev_samp(revenue) as std_revenue
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0
+)
+select
+    e.sales_date,
+    e.revenue,
+    s.mean_revenue,
+    s.std_revenue,
+    e.revenue - s.mean_revenue as deviation,
+    abs(e.revenue - s.mean_revenue) / nullif(s.std_revenue, 0) as z_score,
+    case
+        when abs(e.revenue - s.mean_revenue) / nullif(s.std_revenue, 0) > 2 then 'Anomaly'
+        else 'Normal'
+    end as flag
+from datathon_warehouse.mart_daily_executive_kpis e
+join stats s on true
+where e.sessions > 0
+  and abs(e.revenue - s.mean_revenue) / nullif(s.std_revenue, 0) > 2
+order by abs(e.revenue - s.mean_revenue) / nullif(s.std_revenue, 0) desc
+limit 10
+```
+
+```sql yoy_monthly_growth
+with monthly as (
+    select
+        date_trunc('month', sales_date) as month_start,
+        sum(revenue) as monthly_revenue
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0
+    group by 1
+)
+select
+    month_start,
+    monthly_revenue,
+    lag(monthly_revenue, 12) over (order by month_start) as revenue_12m_ago,
+    round((monthly_revenue - lag(monthly_revenue, 12) over (order by month_start))::double
+        / nullif(lag(monthly_revenue, 12) over (order by month_start), 0), 4) as yoy_growth_rate
+from monthly
+order by month_start
+```
+
+```sql daily_revenue_with_ma
+select
+    sales_date,
+    revenue,
+    avg(revenue) over (order by sales_date rows between 29 preceding and current row) as ma_30d
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
+order by sales_date
+```
+
+```sql annual_revenue_trend
+select
+    date_part('year', sales_date)::int as year,
+    round(sum(revenue), 0) as annual_revenue
+from datathon_warehouse.mart_daily_executive_kpis
+where sessions > 0
+  and date_part('year', sales_date) between 2017 and 2020
+group by 1
+order by 1
+```
+
+```sql cliff_delta
+with annual as (
+    select
+        date_part('year', sales_date)::int as year,
+        sum(revenue) as revenue
+    from datathon_warehouse.mart_daily_executive_kpis
+    where sessions > 0 and year in (2018, 2019)
+    group by 1
+)
+select
+    round((select revenue from annual where year = 2019) - (select revenue from annual where year = 2018), 0) as revenue_drop,
+    round(((select revenue from annual where year = 2019) - (select revenue from annual where year = 2018))::double / (select revenue from annual where year = 2018), 4) as revenue_pct_drop
+from (select 1) t
+```
+
 ## 0. Full-Period Revenue Architecture
 
 <Alert status="info">
@@ -213,6 +295,43 @@ The collapse is almost entirely a <b>conversion crisis</b>.
         fmt="0"
     />
 </Grid>
+
+## 1.5. The 2019 Cliff: Where Revenue Broke
+
+<Alert status="info">
+Section 1 shows a conversion crisis spanning 2013–2022. 
+But <b>when did the collapse actually begin?</b>
+In <b>2019 alone</b>, revenue fell <b><Value data={cliff_delta} column=revenue_pct_drop fmt=pct2/></b> —
+from <Value data={annual_revenue_trend} column=annual_revenue row=1 fmt=num0/> VND in 2018 
+to <Value data={annual_revenue_trend} column=annual_revenue row=2 fmt=num0/> VND in 2019.
+That is <b><Value data={cliff_delta} column=revenue_drop fmt=num0/></b> VND lost in a single year.
+2019 was the inflection point; everything after is a new, lower baseline.
+</Alert>
+
+<BarChart
+    data={annual_revenue_trend}
+    x=year
+    y=annual_revenue
+    title="Annual Revenue 2017-2020"
+    subtitle="The 2019 cliff — steeper than any other single-year change"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
+>
+    <ReferenceArea xMin=2019 xMax=2019 label="Cliff" color=negative/>
+</BarChart>
+
+<BarChart
+    data={yoy_monthly_growth}
+    x=month_start
+    y=yoy_growth_rate
+    title="Monthly Revenue YoY Growth"
+    subtitle="2019 is the only year with sustained negative YoY months"
+    yAxisTitle="YoY Growth Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0 label="Zero Growth" hideValue=true color=negative lineType=dashed/>
+    <ReferenceArea xMin='2019-01-01' xMax='2019-12-31' label="Cliff" color=negative/>
+</BarChart>
 
 ## 2. Channel: Organic Search Is the Revenue Engine
 
@@ -324,6 +443,57 @@ This granular view makes seasonal patterns and anomaly days immediately visible.
     title="Daily Revenue Calendar"
     subtitle="Revenue intensity by day — reveals peak clusters and anomaly periods"
     valueFmt="num0"
+/>
+
+## 5.5. Anomaly Detection: Days That Broke the Pattern
+
+<Alert status="info">
+Days with revenue more than 2 standard deviations from the mean are flagged as anomalies.
+These spikes or drops often coincide with promo events, stockouts, or external shocks.
+</Alert>
+
+<DataTable data={anomaly_detection} rows=10>
+    <Column id=sales_date title="Date"/>
+    <Column id=revenue title="Revenue" fmt=num0/>
+    <Column id=mean_revenue title="Mean Revenue" fmt=num0/>
+    <Column id=z_score title="Z-Score" fmt=0.00/>
+    <Column id=flag title="Flag"/>
+</DataTable>
+
+## 5.6. Year-over-Year Monthly Growth
+
+<Alert status="info">
+YoY growth strips out seasonality and reveals the true underlying trajectory.
+Sustained negative YoY months confirm structural decline, not just seasonal fluctuation.
+</Alert>
+
+<BarChart
+    data={yoy_monthly_growth}
+    x=month_start
+    y=yoy_growth_rate
+    title="Monthly Revenue YoY Growth Rate"
+    subtitle="Year-over-year strips seasonality to reveal true trajectory"
+    yAxisTitle="YoY Growth Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0 label="Zero Growth" hideValue=true color=negative lineType=dashed/>
+</BarChart>
+
+## 5.7. Daily Revenue with 30-Day Moving Average
+
+<Alert status="info">
+The 30-day moving average smooths daily noise and reveals inflection points.
+When daily revenue crosses below the MA, it signals a sustained downtrend.
+</Alert>
+
+<LineChart
+    data={daily_revenue_with_ma}
+    x=sales_date
+    y=revenue
+    title="Daily Revenue with 30-Day Moving Average"
+    subtitle="Smooth trend to spot inflection points"
+    yAxisTitle="Revenue (VND)"
+    yFmt="num0"
 />
 
 ## 6. What-If: Restoring 2013 Conversion at 2022 Traffic

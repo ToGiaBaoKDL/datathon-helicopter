@@ -131,6 +131,128 @@ select
 from base
 ```
 
+```sql rating_distribution
+select
+    category,
+    case
+        when avg_rating >= 4.5 then 'Excellent (4.5-5.0)'
+        when avg_rating >= 3.5 then 'Good (3.5-4.4)'
+        when avg_rating >= 2.5 then 'Fair (2.5-3.4)'
+        else 'Poor (Below 2.5)'
+    end as rating_bucket,
+    count(*) as product_count,
+    avg(return_unit_rate) as avg_return_rate,
+    avg(realized_margin_rate) as avg_margin_rate
+from datathon_warehouse.mart_product_reviews_summary
+where review_count > 0
+group by 1, 2
+order by 1,
+    case
+        when rating_bucket = 'Excellent (4.5-5.0)' then 1
+        when rating_bucket = 'Good (3.5-4.4)' then 2
+        when rating_bucket = 'Fair (2.5-3.4)' then 3
+        else 4
+    end
+```
+
+```sql rating_bucket_summary
+select
+    case
+        when avg_rating >= 4.5 then 'Excellent (4.5-5.0)'
+        when avg_rating >= 3.5 then 'Good (3.5-4.4)'
+        when avg_rating >= 2.5 then 'Fair (2.5-3.4)'
+        else 'Poor (Below 2.5)'
+    end as rating_bucket,
+    count(*) as product_count,
+    avg(return_unit_rate) as avg_return_rate
+from datathon_warehouse.mart_product_reviews_summary
+where review_count > 0
+group by 1
+order by
+    case
+        when rating_bucket = 'Excellent (4.5-5.0)' then 1
+        when rating_bucket = 'Good (3.5-4.4)' then 2
+        when rating_bucket = 'Fair (2.5-3.4)' then 3
+        else 4
+    end
+```
+
+```sql category_quality
+select
+    category,
+    count(*) as products_with_reviews,
+    sum(review_count * avg_rating) / sum(review_count) as avg_rating,
+    avg(return_unit_rate) as avg_return_rate,
+    avg(realized_margin_rate) as avg_margin_rate,
+    sum(review_count) as total_reviews,
+    avg(low_rating_rate) as avg_low_rating_rate
+from datathon_warehouse.mart_product_reviews_summary
+where review_count > 0
+group by 1
+order by avg_rating desc
+```
+
+```sql review_trend
+select
+    month_start_date,
+    category,
+    review_count,
+    avg_rating,
+    low_rating_rate
+from datathon_warehouse.mart_monthly_reviews_trend
+order by month_start_date
+```
+
+```sql high_risk_products
+select
+    product_name,
+    category,
+    avg_rating,
+    return_unit_rate,
+    realized_margin_rate,
+    review_count,
+    total_revenue
+from datathon_warehouse.mart_product_reviews_summary
+where review_count >= 5
+  and avg_rating < 3.0
+order by return_unit_rate desc
+```
+
+```sql poor_rated_count
+select count(*) as poor_products
+from datathon_warehouse.mart_product_reviews_summary
+where review_count >= 5
+  and avg_rating < 3.0
+```
+
+```sql return_rate_ratio
+select
+    round(
+        max(case when rating_bucket = 'Poor (Below 2.5)' then avg_return_rate end)
+        / nullif(max(case when rating_bucket = 'Excellent (4.5-5.0)' then avg_return_rate end), 0),
+        1
+    ) as poor_to_excellent_ratio
+from ${rating_bucket_summary}
+```
+
+```sql no_reviews
+select
+    category,
+    count(*) as products_without_reviews,
+    avg(total_revenue) as avg_revenue,
+    avg(return_unit_rate) as avg_return_rate
+from datathon_warehouse.mart_product_reviews_summary
+where review_count = 0
+group by 1
+order by products_without_reviews desc
+```
+
+```sql no_reviews_total
+select count(*) as products_without_reviews
+from datathon_warehouse.mart_product_reviews_summary
+where review_count = 0
+```
+
 ## 1. The Rate: One in Every <Value data={return_summary} column=orders_per_return fmt=0/> Orders Returns
 
 <Alert status="info">
@@ -172,6 +294,48 @@ These are fixable. <b>Changed_mind</b> and <b>late_delivery</b> are harder to co
     yFmt="0"
 />
 
+## 2.5. Rating Distribution: Where Quality Clusters
+
+<Alert status="info">
+Most reviewed products fall into the Good or Excellent buckets. 
+However, the <b>Poor</b> bucket — while small — carries a disproportionately high return rate. 
+These outliers are a small group with outsized operational impact.
+</Alert>
+
+<BarChart
+    data={rating_distribution}
+    x=rating_bucket
+    y=product_count
+    series=category
+    sort=false
+    title="Product Count by Rating Bucket"
+    subtitle="Quality distribution across categories"
+    yAxisTitle="Products"
+    yFmt="0"
+/>
+
+## 2.6. Return Rate by Rating Bucket: The Poor-Rated Penalty
+
+<Alert status="warning">
+Lower-rated products drive return rates <b><Value data={return_rate_ratio} column=poor_to_excellent_ratio fmt=0.0/>×</b> the Excellent tier
+(<Value data={rating_bucket_summary} column=avg_return_rate row=3 fmt=pct2/> Poor vs <Value data={rating_bucket_summary} column=avg_return_rate row=0 fmt=pct2/> Excellent).
+Fixing or delisting Poor-rated SKUs is high-ROI housekeeping.
+</Alert>
+
+<BarChart
+    data={rating_distribution}
+    x=rating_bucket
+    y=avg_return_rate
+    series=category
+    sort=false
+    title="Average Return Rate by Rating Bucket"
+    subtitle="Lower ratings correlate with higher returns"
+    yAxisTitle="Return Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
+</BarChart>
+
 ## 3. Quality Correlation: Rating vs Return Rate
 
 <Alert status="info">
@@ -210,6 +374,54 @@ These are the highest-priority targets for QC and sizing-guide fixes.
     <Column id=total_units_sold title="Units Sold" fmt=0/>
 </DataTable>
 
+## 3.5. Category Quality Rank: Which Categories Satisfy Customers?
+
+<Alert status="info">
+Category-level average rating reveals where customer satisfaction is strongest and weakest. 
+Categories with low ratings and high return rates need immediate quality investment.
+</Alert>
+
+<BarChart
+    data={category_quality}
+    x=category
+    y=avg_rating
+    title="Average Rating by Category"
+    subtitle="Category-level customer satisfaction rank"
+    yAxisTitle="Avg Rating"
+    yFmt="0.00"
+>
+    <ReferenceLine y=3.5 label="3.5 Floor" hideValue=true color=warning lineType=dashed/>
+</BarChart>
+
+<BarChart
+    data={category_quality}
+    x=category
+    y=avg_return_rate
+    title="Average Return Rate by Category"
+    subtitle="Quality problems surface as returns"
+    yAxisTitle="Return Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
+</BarChart>
+
+## 3.6. High-Risk Products: Rating Below 3.0
+
+<Alert status="warning">
+<Value data={poor_rated_count} column=poor_products fmt=0/> products have avg_rating below 3.0 with at least 5 reviews. 
+They are actively damaging customer trust and margin. Consider delisting, repricing, or switching suppliers.
+</Alert>
+
+<DataTable data={high_risk_products} rows=10>
+    <Column id=product_name title="Product"/>
+    <Column id=category title="Category"/>
+    <Column id=avg_rating title="Rating" fmt=0.0/>
+    <Column id=return_unit_rate title="Return Rate" fmt=pct2/>
+    <Column id=realized_margin_rate title="Margin" fmt=pct2/>
+    <Column id=review_count title="Reviews" fmt=0/>
+    <Column id=total_revenue title="Revenue" fmt=num0/>
+</DataTable>
+
 ## 4. Monthly Trend: Persistent, Not Spiking
 
 <Alert status="info">
@@ -228,6 +440,66 @@ This is a baseline quality problem, not a one-off incident.
 >
     <ReferenceLine y=0.05 label="5% Threshold" hideValue=true color=negative lineType=dashed/>
 </LineChart>
+
+## 4.5. Review Signals: Volume and Rating Trends
+
+<Alert status="info">
+Review volume is a proxy for purchase volume and engagement. 
+A declining review trend with flat revenue suggests fewer but bigger orders — or fewer customers leaving feedback, a warning sign for engagement.
+</Alert>
+
+<LineChart
+    data={review_trend}
+    x=month_start_date
+    y=review_count
+    series=category
+    title="Monthly Review Volume by Category"
+    subtitle="Customer feedback trend over time"
+    yAxisTitle="Review Count"
+    yFmt="0"
+/>
+
+<LineChart
+    data={review_trend}
+    x=month_start_date
+    y=avg_rating
+    series=category
+    title="Average Rating Trend by Category"
+    subtitle="Track category quality evolution"
+    yAxisTitle="Avg Rating"
+    yFmt="0.00"
+>
+    <ReferenceLine y=3.5 label="3.5 Floor" hideValue=true color=warning lineType=dashed/>
+</LineChart>
+
+## 4.6. Products Without Reviews: The Blind Spot
+
+<Alert status="warning">
+<Value data={no_reviews_total} column=products_without_reviews fmt=0/> products have zero reviews. 
+If they generate revenue but no feedback, the business is flying blind on quality for a significant part of the catalog.
+</Alert>
+
+<BarChart
+    data={no_reviews}
+    x=category
+    y=products_without_reviews
+    title="Products Without Reviews by Category"
+    subtitle="Blind spots in quality monitoring"
+    yAxisTitle="Products"
+    yFmt="0"
+/>
+
+<BarChart
+    data={no_reviews}
+    x=category
+    y=avg_return_rate
+    title="Avg Return Rate of No-Review Products"
+    subtitle="Silent products may still carry return risk"
+    yAxisTitle="Return Rate"
+    yFmt="pct2"
+>
+    <ReferenceLine y=0.05 label="5% Alert" hideValue=true color=negative lineType=dashed/>
+</BarChart>
 
 ## 5. The Cost: Total Refund Exposure
 

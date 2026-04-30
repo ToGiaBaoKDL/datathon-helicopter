@@ -236,9 +236,11 @@ When above, demand is accelerating.
     subtitle="Trend smoothing to identify inflection points"
     yAxisTitle="Revenue"
     yFmt="num0"
->
-    <ReferenceLine data={daily_with_ma} y=ma_30d label="30D MA" hideValue=true color=info/>
-</LineChart>
+/>
+
+<Alert status="info">
+The 30-day moving average smooths daily noise. When daily revenue consistently runs below the MA, demand is decelerating; when above, accelerating.
+</Alert>
 
 ## Seasonal Pattern Summary
 

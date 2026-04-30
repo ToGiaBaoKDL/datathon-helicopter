@@ -117,9 +117,11 @@ to reduce single-region risk from logistics disruption, local competition, or re
     subtitle="Geographic revenue concentration"
     yAxisTitle="Revenue"
     yFmt="num0"
->
-    <ReferencePoint data={region_top} x=region y=total_revenue label="Top region" labelPosition=top color=info/>
-</BarChart>
+/>
+
+<Alert status="info">
+Top region by revenue: <Value data={region_top} column=region/> (<Value data={region_top} column=total_revenue fmt=num0/> VND).
+</Alert>
 
 <BarChart
     swapXY=true
@@ -187,9 +189,11 @@ given that current delivery speed is already uniform (~6 days) across all region
     subtitle="Logistics cost per order by region"
     yAxisTitle="Shipping Fee"
     yFmt="num0"
->
-    <ReferencePoint data={region_highest_fee} x=region y=avg_shipping_fee label="Highest fee" labelPosition=top color=warning/>
-</BarChart>
+/>
+
+<Alert status="info">
+Highest shipping fee: <Value data={region_highest_fee} column=region/> at <Value data={region_highest_fee} column=avg_shipping_fee fmt=num0/> VND.
+</Alert>
 
 <BarChart
     swapXY=true

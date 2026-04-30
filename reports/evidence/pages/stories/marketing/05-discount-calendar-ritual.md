@@ -91,6 +91,27 @@ group by 1
 order by avg_discount desc
 ```
 
+```sql what_if_discount_cut
+with base as (
+    select
+        round(avg(discount_rate), 4) as current_discount,
+        round(sum(total_net_revenue), 0) as total_promo_revenue,
+        round(sum(total_discount_amount), 0) as total_discount,
+        count(*) as campaign_count
+    from datathon_warehouse.mart_promotion_effectiveness
+    where total_orders > 0 and promo_type = 'percentage'
+)
+select
+    current_discount,
+    total_promo_revenue,
+    total_discount,
+    round(current_discount - 0.02, 4) as reduced_discount,
+    round(total_discount * (current_discount - 0.02) / nullif(current_discount, 0), 0) as reduced_discount_amount,
+    round(total_discount - reduced_discount_amount, 0) as margin_protected,
+    round(total_promo_revenue + margin_protected, 0) as implied_revenue_if_elasticity_zero
+from base
+```
+
 ```sql discount_dow
 select
     extract(dow from sales_date) as dow,
@@ -172,7 +193,7 @@ promotional budget is being misallocated.
     yAxisTitle="Discount / Revenue"
     yFmt="pct2"
 >
-    <ReferenceLine y=0.10 label="10% Benchmark" hideValue=true color=info lineType=dashed/>
+    <ReferenceLine y=0.05 label="5% Benchmark" hideValue=true color=info lineType=dashed/>
 </BarChart>
 
 ## 2. The Decline: Promo Revenue Is Falling
@@ -235,6 +256,38 @@ The margin problem is structural — pricing and COGS — not promotional.
     yAxisTitle="Discount Rate"
     yFmt="pct2"
 />
+
+## 4. What-If: Cut Discount Depth by 2 Points
+
+<Alert status="info">
+Percentage campaigns currently average <b><Value data={what_if_discount_cut} column=current_discount fmt=pct2/></b> discount,
+spending <b><Value data={what_if_discount_cut} column=total_discount fmt=num0/></b> VND in total discounts.
+If the average discount rate is reduced by 2 percentage points (to <Value data={what_if_discount_cut} column=reduced_discount fmt=pct2/>),
+total discount spend drops to <b><Value data={what_if_discount_cut} column=reduced_discount_amount fmt=num0/></b> VND —
+protecting <b><Value data={what_if_discount_cut} column=margin_protected fmt=num0/></b> VND in margin.
+Even if demand elasticity is zero (no volume loss), this is pure margin gain.
+</Alert>
+
+<Grid cols=3>
+    <BigValue
+        data={what_if_discount_cut}
+        value=current_discount
+        title="Current Avg Discount"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_discount_cut}
+        value=reduced_discount
+        title="Reduced Discount"
+        fmt="pct2"
+    />
+    <BigValue
+        data={what_if_discount_cut}
+        value=margin_protected
+        title="Margin Protected"
+        fmt="num0"
+    />
+</Grid>
 
 ## The Verdict
 

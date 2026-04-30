@@ -360,9 +360,12 @@ where deep discounts (above 20%) fail to lift revenue proportionally — classic
     xFmt="pct2"
     yFmt="num0"
 >
-    <ReferenceLine data={avg_discount} x=avg_discount label="Avg Discount" hideValue=true color=info/>
     <ReferenceArea xMin=0.20 label="Diminishing Returns" color=warning opacity=0.18/>
 </BubbleChart>
+
+<Alert status="info">
+Average discount rate across all campaigns: <Value data={avg_discount} column=avg_discount fmt=pct2/>.
+</Alert>
 
 ## Channel Breakdown
 
