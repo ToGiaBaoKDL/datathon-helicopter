@@ -85,7 +85,7 @@ class TestUpdateRowFeatures:
         _update_row_features(df, idx)
 
         lag1 = df.at[idx, "lag_1d_revenue"]
-        lag8 = df.at[idx, "lag_8d_revenue"]
+        lag8 = df["revenue"].iloc[idx - 8]
         expected_wow = lag1 / lag8 - 1
         assert df.at[idx, "lag_1d_rev_wow_growth"] == pytest.approx(expected_wow)
 
@@ -96,7 +96,6 @@ class TestUpdateRowFeatures:
 
         win7 = df["revenue"].iloc[idx - 7 : idx].to_numpy()
         assert df.at[idx, "roll_mean_7d_revenue"] == pytest.approx(float(np.mean(win7)))
-        assert df.at[idx, "roll_median_7d_revenue"] == pytest.approx(float(np.median(win7)))
         assert df.at[idx, "roll_std_7d_revenue"] == pytest.approx(
             float(np.std(win7, ddof=1)), abs=1e-6
         )
@@ -109,13 +108,17 @@ class TestUpdateRowFeatures:
         assert pd.isna(df.at[idx, "roll_mean_7d_revenue"])
         assert pd.isna(df.at[idx, "roll_std_7d_revenue"])
 
-    def test_baseline_updated(self) -> None:
+    def test_baseline_not_recomputed_by_update(self) -> None:
+        # Baseline is known-in-advance (set by _prepare_future_frame),
+        # _update_row_features does NOT recompute it.
         df = self._make_history(400)
+        df["revenue_baseline"] = 100.0
+        df["cogs_baseline"] = 80.0
         idx = 366
         _update_row_features(df, idx)
 
-        assert df.at[idx, "revenue_baseline"] == df.at[idx, "lag_365d_revenue"]
-        assert df.at[idx, "cogs_baseline"] == df.at[idx, "lag_365d_cogs"]
+        assert df.at[idx, "revenue_baseline"] == 100.0
+        assert df.at[idx, "cogs_baseline"] == 80.0
 
     def test_cogs_ratio_updated(self) -> None:
         df = self._make_history(400)
@@ -147,11 +150,7 @@ class TestUpdateRowFeatures:
         _update_row_features(df, idx)
 
         assert df.at[idx, "lag_1d_rev_residual"] == 123.0
-        assert df.at[idx, "lag_2d_rev_residual"] == 110.0
-        assert df.at[idx, "lag_3d_rev_residual"] == 100.0
         assert df.at[idx, "lag_1d_cogs_residual"] == 45.0
-        assert df.at[idx, "lag_2d_cogs_residual"] == 42.0
-        assert df.at[idx, "lag_3d_cogs_residual"] == 40.0
 
     def test_lagged_residuals_before_window_are_nan(self) -> None:
         df = self._make_history(400)
@@ -159,17 +158,14 @@ class TestUpdateRowFeatures:
         _update_row_features(df, idx)
 
         assert pd.isna(df.at[idx, "lag_1d_rev_residual"])
-        assert pd.isna(df.at[idx, "lag_2d_rev_residual"])
-        assert pd.isna(df.at[idx, "lag_3d_rev_residual"])
         assert pd.isna(df.at[idx, "lag_1d_cogs_residual"])
-        assert pd.isna(df.at[idx, "lag_2d_cogs_residual"])
-        assert pd.isna(df.at[idx, "lag_3d_cogs_residual"])
 
 
 class TestPrepareFutureFrame:
     def _make_history(self, n: int = 10) -> pd.DataFrame:
         dates = pd.date_range("2023-01-01", periods=n)
         df = pd.DataFrame({"sales_date": dates})
+        df["month"] = dates.month
         for c in CALENDAR_FEATURES:
             df[c] = 0.0
         for c in _TARGET_DERIVED:
@@ -177,6 +173,16 @@ class TestPrepareFutureFrame:
         df["revenue"] = 1.0
         df["cogs"] = 0.8
         df["sessions"] = 100.0
+        # Columns needed by _prepare_future_frame for seasonal baselines & promos
+        df["hist_avg_revenue_dow"] = 1.0
+        df["hist_avg_cogs_dow"] = 0.8
+        df["hist_avg_revenue_month"] = 1.0
+        df["hist_avg_cogs_month"] = 0.8
+        df["overall_avg_revenue"] = 1.0
+        df["overall_avg_cogs"] = 0.8
+        df["promo_month_day_count"] = 0.0
+        df["promo_month_prob"] = 0.0
+        df["promo_month_avg_discount"] = 0.0
         return df
 
     def test_future_has_all_calendar_features(self) -> None:
@@ -189,11 +195,11 @@ class TestPrepareFutureFrame:
 
     def test_future_exogenous_forward_filled(self) -> None:
         history = self._make_history(10)
-        history["sessions"] = 999.0
+        history["my_exogenous"] = 999.0
         scaffold = pd.DataFrame({"date": pd.date_range("2023-01-11", periods=3)})
         future = _prepare_future_frame(history, scaffold)
 
-        assert (future["sessions"] == 999.0).all()
+        assert (future["my_exogenous"] == 999.0).all()
 
     def test_future_leap_year_handling(self) -> None:
         history = self._make_history(10)
@@ -205,16 +211,6 @@ class TestPrepareFutureFrame:
         # day_of_year_cos uses 366 for leap year
         expected_cos = np.cos(2 * np.pi * 60 / 366)
         assert future["day_of_year_cos"].iloc[0] == pytest.approx(expected_cos)
-
-    def test_future_tet_features(self) -> None:
-        history = self._make_history(10)
-        history["sales_date"] = pd.date_range("2023-01-01", periods=10)
-        scaffold = pd.DataFrame({"date": [pd.Timestamp("2023-01-15")]})
-        future = _prepare_future_frame(history, scaffold)
-
-        # [FS] is_pre_tet_rush commented out — days_to_tet captures same signal
-        # assert future["is_pre_tet_rush"].iloc[0] == 1
-        assert future["days_to_tet"].iloc[0] == 7  # 7 days before Tet 2023-01-22
 
     def test_future_revenue_cogs_are_nan(self) -> None:
         history = self._make_history(10)

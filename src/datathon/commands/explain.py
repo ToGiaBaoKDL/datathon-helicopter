@@ -10,8 +10,9 @@ from rich.table import Table
 from datathon.commands.common import CommandError, ensure_no_unknown_args, take_option
 from datathon.modeling.explainer import explain_forecaster
 from datathon.modeling.trainer import Trainer
+from datathon.utils.config import load_modeling_config
 from datathon.utils.console import console
-from datathon.utils.data_loaders import load_modeling_data
+from datathon.utils.data_loaders import load_training_data
 from datathon.utils.help_texts import explain_help
 from datathon.utils.paths import models_dir, reports_dir, warehouse_path
 
@@ -68,11 +69,12 @@ def run(options: ExplainOptions) -> None:
         raise CommandError(f"Model directory not found: {options.model_dir}")
 
     console.print(f"Loading artifacts from [bold]{options.model_dir}[/bold] …")
-    forecaster, _feature_cols, _model_type, _cogs_col, _residual = Trainer.load_artifacts(
-        options.model_dir
+    forecaster, _feature_cols, _model_type, _cogs_col, _residual, _seq, _rh, _fm, _spk = (
+        Trainer.load_artifacts(options.model_dir)
     )
 
-    df = load_modeling_data(options.warehouse)
+    config = load_modeling_config()
+    df = load_training_data(config, options.warehouse)
     console.print(f"Loaded [bold]{len(df)}[/bold] rows for background distribution.")
 
     console.print("\nRunning SHAP explainability …")
@@ -82,6 +84,7 @@ def run(options: ExplainOptions) -> None:
         output_dir=options.output_dir,
         sample_size=options.sample_size,
         max_display=options.max_display,
+        feature_cols=_feature_cols,
     )
 
     for target, shap_df in results.items():

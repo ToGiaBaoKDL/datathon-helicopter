@@ -17,10 +17,9 @@ class CatBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
         self._early_stopping_rounds = cb_kwargs.pop("early_stopping_rounds", 50)
         self._cb_kwargs = cb_kwargs
 
-    def fit(self, X, y_rev, y_cogs, eval_set=None):
+    def fit(self, X, y_rev, y_cogs, eval_set=None, sample_weight=None):
         rev_kwargs = dict(self._cb_kwargs)
         cogs_kwargs = dict(self._cb_kwargs)
-        # Ensure reproducibility
         if "random_seed" not in rev_kwargs and "random_state" not in rev_kwargs:
             rev_kwargs["random_seed"] = 42
         if "random_seed" not in cogs_kwargs and "random_state" not in cogs_kwargs:
@@ -42,6 +41,10 @@ class CatBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
                 "early_stopping_rounds": self._early_stopping_rounds,
                 "verbose": False,
             }
+
+        if sample_weight is not None:
+            fit_rev["sample_weight"] = sample_weight
+            fit_cogs["sample_weight"] = sample_weight
 
         self.model_rev.fit(X, y_rev, **fit_rev)
         self.model_cogs.fit(X, y_cogs, **fit_cogs)

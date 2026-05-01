@@ -26,7 +26,3 @@ models:
     marts:
       +materialized: table
       +schema: marts
-
-seeds:
-  datathon_round1:
-    +schema: seeds

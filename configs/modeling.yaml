@@ -1,32 +1,85 @@
-cogs_target: absolute       # "absolute" or "ratio"
-target_transform: identity       # "identity" | "residual" | "log"
+# Target transform for the revenue model:
+#   "identity"      — predict raw revenue directly
+#   "residual"      — predict revenue - seasonal_baseline; reconstruct: baseline + pred
+#   "log"           — predict log1p(revenue); reconstruct: expm1(pred)
+#   "log_residual"  — Prophet on log1p(revenue), predict log-residual;
+#                     reconstruct: expm1(log_baseline + pred)
+target_transform: log_residual
 
-# Optional: discard rows before this date to focus on recent regime.
-train_start_date: "2015-01-01"
+# Forecast mode:
+#   "recursive"  — day-by-day recursive forecast (lags/rolling updated each step)
+#   "direct"     — predict all horizon days at once using static features only
+#                  (no lag features, no error accumulation)
+forecast_mode: direct
+
+# Stacking meta-learner (trained on OOF predictions during compare-models)
+#   false  — simple weighted ensemble
+#   true   — HuberRegressor meta-learner on base model OOF predictions
+stacking: true
+
+# COGS target mode:
+#   "absolute"  — predict raw COGS independently
+#   "ratio"     — predict cogs_ratio = COGS / revenue; reconstruct: revenue * ratio
+cogs_target: absolute
+
+# When true, train a separate revenue model first, then feed predicted revenue
+# into the COGS model as an extra feature.  Independent of cogs_target.
+sequential_cogs: true
+
+# When true, replace additive decomposition baseline (dow + month - overall)
+# with Prophet (trend + yearly/weekly seasonality).  Stronger baseline that
+# unlocks the value of domain features such as sale seasons.
+prophet_baseline: true
+
+# When true, add daily promo intensity features from stg_promotions.
+# Historical dates use actual promotions; future dates use pattern-based
+# prediction (odd/even year detection + median timing).
+promo_features: true
+
+# When true, train an XGBoost spike classifier that detects high-revenue
+# days and applies an empirical boost to base predictions.
+spike_classifier: true
+
+# Filter training data to start from this date (null = use all history)
+# train_start_date: "2019-01-01"
+
+# Restart recursive forecast every N days to curb error accumulation.
+# Set to null or remove to disable (single-pass for the full horizon).
+restart_horizon: 365
 
 models:
   lightgbm:
     n_estimators: 5000
     learning_rate: 0.05
-    num_leaves: 31
+    num_leaves: 127
     max_depth: -1
-    objective: regression
+    objective: huber
+    alpha: 0.9
     verbose: -1
     n_jobs: 8
     early_stopping_rounds: 50
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
   xgboost:
     n_estimators: 5000
     learning_rate: 0.05
-    max_depth: 6
-    objective: reg:squarederror
+    max_depth: 8
+    objective: reg:absoluteerror
+    tree_method: hist
     verbosity: 0
     n_jobs: 8
     early_stopping_rounds: 50
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_lambda: 1.0
   catboost:
     iterations: 5000
     learning_rate: 0.05
-    depth: 6
-    loss_function: RMSE
+    depth: 8
+    loss_function: Huber:delta=1.5
     verbose: false
     thread_count: 8
     early_stopping_rounds: 50
+    rsm: 0.8
+    l2_leaf_reg: 3.0

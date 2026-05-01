@@ -36,7 +36,7 @@ class TuneOptions:
 
 def parse_args(raw_args: list[str]) -> TuneOptions:
     args = list(raw_args)
-    model_type = take_option(args, "--model-type", default="catboost")
+    model_type = take_option(args, "--model-type", default="lightgbm")
     available = list_forecasters()
     if model_type not in available:
         raise CommandError(f"--model-type must be one of: {', '.join(available)}.")
@@ -92,6 +92,16 @@ def print_help() -> None:
 def run(options: TuneOptions) -> None:
     config = load_modeling_config(options.config_path)
     df = load_training_data(config, options.warehouse)
+
+    from datathon.utils.config import resolve_targets
+
+    _, cogs_column, target_transform, _ = resolve_targets(config)
+    console.print(
+        f"Config: target_transform=[bold]{target_transform}[/bold] | "
+        f"cogs_target=[bold]{cogs_column}[/bold] | "
+        f"sequential_cogs=[bold]{config.get('sequential_cogs', False)}[/bold]"
+    )
+
     storage = options.storage
     if storage is None:
         storage_path = project_root() / "optuna_studies" / f"{options.model_type}.db"

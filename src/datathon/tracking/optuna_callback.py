@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import mlflow
 import optuna
+
+import mlflow
 
 if TYPE_CHECKING:
     from datathon.tracking.tracker import MlflowTracker

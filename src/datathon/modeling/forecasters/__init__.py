@@ -3,15 +3,29 @@
 from __future__ import annotations
 
 from datathon.modeling.forecasters.base import BaseForecaster
-from datathon.modeling.forecasters.catboost import CatBoostForecaster
-from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
-from datathon.modeling.forecasters.xgboost import XGBoostForecaster
 
-FORECASTERS: dict[str, type[BaseForecaster]] = {
-    "lightgbm": LightGBMForecaster,
-    "xgboost": XGBoostForecaster,
-    "catboost": CatBoostForecaster,
-}
+FORECASTERS: dict[str, type[BaseForecaster]] = {}
+
+try:
+    from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
+
+    FORECASTERS["lightgbm"] = LightGBMForecaster
+except ImportError:
+    pass
+
+try:
+    from datathon.modeling.forecasters.xgboost import XGBoostForecaster
+
+    FORECASTERS["xgboost"] = XGBoostForecaster
+except ImportError:
+    pass
+
+try:
+    from datathon.modeling.forecasters.catboost import CatBoostForecaster
+
+    FORECASTERS["catboost"] = CatBoostForecaster
+except ImportError:
+    pass
 
 
 def list_forecasters() -> list[str]:

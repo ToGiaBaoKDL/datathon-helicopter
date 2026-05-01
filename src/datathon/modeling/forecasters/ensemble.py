@@ -28,7 +28,7 @@ class EnsembleForecaster(BaseForecaster):
             raise ValueError("weights must have same length as members")
         self.weights = weights
 
-    def fit(self, X, y_rev, y_cogs, eval_set=None):
+    def fit(self, X, y_rev, y_cogs, eval_set=None, **kwargs):
         """No-op: ensemble assumes members are already fitted."""
         pass
 

@@ -23,7 +23,7 @@ reports/evidence/.svelte-kit/
 /models/
 data/raw/
 data/processed/
-data/submissions/
+# data/submissions/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/submissions/.gitkeep

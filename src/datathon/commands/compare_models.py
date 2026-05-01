@@ -17,11 +17,11 @@ from datathon.modeling.factory import build_forecaster
 from datathon.modeling.forecasters import list_forecasters
 from datathon.modeling.forecasters.ensemble import EnsembleForecaster
 from datathon.modeling.metrics import fold_metrics
-from datathon.modeling.recursive import recursive_forecast
+from datathon.modeling.recursive import direct_forecast, recursive_forecast
 from datathon.modeling.trainer import Trainer
 from datathon.tracking import MlflowTracker
 from datathon.utils.competition import submission_columns
-from datathon.utils.config import load_modeling_config, resolve_targets
+from datathon.utils.config import load_modeling_config, merge_model_config, resolve_targets
 from datathon.utils.console import console
 from datathon.utils.data_loaders import load_scaffold, load_training_data
 from datathon.utils.help_texts import compare_help
@@ -94,11 +94,22 @@ def _run_comparison(
     purge_days: int,
     cogs_column: str = "cogs",
     target_transform: str = "identity",
-) -> tuple[str, dict, dict[str, list[pd.DataFrame]], list[float]]:
+    restart_horizon: int | None = None,
+    forecast_mode: str = "recursive",
+) -> tuple[
+    str,
+    dict,
+    dict[str, list[pd.DataFrame]],
+    list[float],
+    dict[str, list[tuple[int | None, int | None]]],
+    object | None,
+    object | None,
+]:
     """Run CV for all models, compute weighted ensemble CV."""
     cv = build_cv(n_folds, horizon_days, cv_type, train_window_days, purge_days)
     all_results: dict[str, dict[str, list[dict[str, float]]]] = {}
     all_preds: dict[str, list[pd.DataFrame]] = {}
+    all_best_iters: dict[str, list[tuple[int | None, int | None]]] = {}
     scores: dict[str, float] = {}
 
     available = list_forecasters()
@@ -109,16 +120,21 @@ def _run_comparison(
     ) as progress:
         for model_type in available:
             task = progress.add_task(f"Evaluating {model_type} …", total=None)
-            forecaster = build_forecaster(model_type, config)
+            model_config = merge_model_config(config, model_type)
+            forecaster = build_forecaster(model_type, model_config)
             trainer = Trainer(
                 forecaster=forecaster,
                 cv=cv,
                 cogs_column=cogs_column,
                 target_transform=target_transform,
+                forecast_mode=forecast_mode,
             )
-            results, preds = trainer.run_cv(df, return_predictions=True)
+            results, preds = trainer.run_cv(
+                df, return_predictions=True, sample_weight=True, restart_horizon=restart_horizon
+            )
             all_results[model_type] = results
             all_preds[model_type] = preds
+            all_best_iters[model_type] = list(trainer._last_cv_best_iters)
 
             avg_rev_mae = sum(r["mae"] for r in results["revenue"]) / len(results["revenue"])
             avg_cogs_mae = sum(r["mae"] for r in results["cogs"]) / len(results["cogs"])
@@ -132,7 +148,16 @@ def _run_comparison(
             )
 
     ensemble_results: dict[str, list[dict[str, float]]] = {"revenue": [], "cogs": []}
-    actuals_df = df[["sales_date", "revenue", "cogs"]].rename(columns={"sales_date": "date"})
+    actuals_cols = ["sales_date", "revenue", "cogs"]
+    if target_transform in ("residual", "log_residual"):
+        actuals_cols.extend(
+            ["revenue_residual", "cogs_residual", "revenue_baseline", "cogs_baseline"]
+        )
+    if target_transform == "log_residual":
+        actuals_cols.extend(["log_revenue_baseline", "log_cogs_baseline"])
+    if target_transform == "log":
+        actuals_cols.extend(["log_revenue", "log_cogs"])
+    actuals_df = df[actuals_cols].rename(columns={"sales_date": "date"})
     fold_weights_all: list[list[float]] = []
 
     for fold_idx in range(cv.n_folds):
@@ -198,8 +223,75 @@ def _run_comparison(
     w_sum = sum(averaged_weights)
     ensemble_weights = [w / w_sum for w in averaged_weights]
 
+    # ------------------------------------------------------------------
+    # Stacking meta-learner (optional)
+    # ------------------------------------------------------------------
+    meta_rev = None
+    meta_cogs = None
+    if config.get("stacking", False):
+        # Collect OOF predictions across all folds
+        oof_rev = {m: [] for m in available}
+        oof_cogs = {m: [] for m in available}
+        oof_y_rev = []
+        oof_y_cogs = []
+        # Collect raw actuals for MAE computation (same scale as other models)
+        oof_raw_rev = []
+        oof_raw_cogs = []
+
+        for fold_idx in range(cv.n_folds):
+            fold_actuals = actuals_df.merge(all_preds[available[0]][fold_idx][["date"]], on="date")
+            # Target for meta-learner = raw targets (same as ensemble)
+            oof_y_rev.extend(fold_actuals["revenue"].to_numpy())
+            oof_y_cogs.extend(fold_actuals["cogs"].to_numpy())
+            # Raw actuals for final MAE (must match other models' scale)
+            oof_raw_rev.extend(fold_actuals["revenue"].to_numpy())
+            oof_raw_cogs.extend(fold_actuals["cogs"].to_numpy())
+            for m in available:
+                preds = all_preds[m][fold_idx]
+                merged = fold_actuals.merge(preds, on="date")
+                oof_rev[m].extend(merged["revenue_pred"].to_numpy())
+                oof_cogs[m].extend(merged["cogs_pred"].to_numpy())
+
+        # Use simple non-negative least squares (NNLS) to learn weights
+        # that minimise MAE on raw predictions.  NNLS forces positive
+        # weights so we don't get destructive interference.
+        from scipy.optimize import nnls
+
+        X_meta_rev = np.column_stack([oof_rev[m] for m in available])
+        X_meta_cogs = np.column_stack([oof_cogs[m] for m in available])
+
+        w_rev, _ = nnls(X_meta_rev, np.asarray(oof_y_rev, dtype=float))
+        w_cogs, _ = nnls(X_meta_cogs, np.asarray(oof_y_cogs, dtype=float))
+        # Normalise to sum=1
+        w_rev = w_rev / w_rev.sum() if w_rev.sum() > 0 else np.ones(len(available)) / len(available)
+        w_cogs = (
+            w_cogs / w_cogs.sum() if w_cogs.sum() > 0 else np.ones(len(available)) / len(available)
+        )
+
+        # Store weights directly (pickle-friendly)
+        meta_rev = w_rev
+        meta_cogs = w_cogs
+
+        # Compute stacked CV score on RAW scale (comparable with other models)
+        stacked_rev_raw = np.average(X_meta_rev, axis=1, weights=meta_rev)
+        stacked_cogs_raw = np.average(X_meta_cogs, axis=1, weights=meta_cogs)
+
+        stacked_rev_mae = float(np.abs(np.asarray(oof_raw_rev) - stacked_rev_raw).mean())
+        stacked_cogs_mae = float(np.abs(np.asarray(oof_raw_cogs) - stacked_cogs_raw).mean())
+        scores["stacked"] = stacked_rev_mae + stacked_cogs_mae
+        all_results["stacked"] = {
+            "revenue": [{"fold": 1, "mae": stacked_rev_mae, "rmse": 0.0, "r2": 0.0}],
+            "cogs": [{"fold": 1, "mae": stacked_cogs_mae, "rmse": 0.0, "r2": 0.0}],
+        }
+        console.print(
+            f"[bold cyan]Stacked ensemble[/bold cyan] — "
+            f"Rev MAE {stacked_rev_mae:,.0f} | COGS MAE {stacked_cogs_mae:,.0f} | "
+            f"Total {stacked_rev_mae + stacked_cogs_mae:,.0f}"
+        )
+        console.print(f"  Meta weights (rev): {dict(zip(available, w_rev.tolist(), strict=True))}")
+
     winner = min(scores, key=scores.get)
-    return winner, all_results, all_preds, ensemble_weights
+    return winner, all_results, all_preds, ensemble_weights, all_best_iters, meta_rev, meta_cogs
 
 
 def _print_summary(
@@ -231,6 +323,7 @@ def run(options: CompareOptions) -> None:
     config = load_modeling_config(options.config_path)
     df = load_training_data(config, options.warehouse)
     _, cogs_column, target_transform, cogs_is_ratio = resolve_targets(config)
+    forecast_mode = config.get("forecast_mode", "recursive")
 
     cv_label = f"{options.cv_type}"
     if options.cv_type == "sliding":
@@ -241,10 +334,22 @@ def run(options: CompareOptions) -> None:
     console.print(
         f"Comparing [bold]{len(list_forecasters())}[/bold] model types + weighted ensemble on "
         f"[bold]{len(df)}[/bold] rows | COGS: {cogs_column} | transform: {target_transform} | "
+        f"forecast_mode=[bold]{forecast_mode}[/bold] | "
+        f"sequential_cogs=[bold]{config.get('sequential_cogs', False)}[/bold] | "
+        f"restart_horizon=[bold]{config.get('restart_horizon', 'null')}[/bold] | "
         f"CV: {options.n_folds}-fold × {options.horizon_days}d ({cv_label}) …"
     )
 
-    winner, all_results, _all_preds, ensemble_weights = _run_comparison(
+    restart_horizon = config.get("restart_horizon")
+    (
+        winner,
+        all_results,
+        _all_preds,
+        ensemble_weights,
+        all_best_iters,
+        meta_rev,
+        meta_cogs,
+    ) = _run_comparison(
         df,
         config,
         options.n_folds,
@@ -254,6 +359,8 @@ def run(options: CompareOptions) -> None:
         options.purge_days,
         cogs_column,
         target_transform,
+        restart_horizon=restart_horizon,
+        forecast_mode=forecast_mode,
     )
     _print_summary(all_results, winner)
 
@@ -275,15 +382,27 @@ def run(options: CompareOptions) -> None:
                     f"  [dim]{model_type}: already exists at {model_dir}, skipping.[/dim]"
                 )
                 continue
-            forecaster = build_forecaster(model_type, config)
+            model_config = merge_model_config(config, model_type)
+            forecaster = build_forecaster(model_type, model_config)
             cv = build_cv(n_folds=1, horizon_days=1, cv_type="expanding")
             trainer = Trainer(
                 forecaster=forecaster,
                 cv=cv,
                 cogs_column=cogs_column,
                 target_transform=target_transform,
+                forecast_mode=forecast_mode,
             )
-            forecaster_fitted, feature_cols = trainer.train_final(df)
+            if model_type in all_best_iters:
+                trainer._last_cv_best_iters = list(all_best_iters[model_type])
+            forecaster_fitted, feature_cols = trainer.train_final(df, sample_weight=True)
+
+            spike_classifier = None
+            if config.get("spike_classifier", False):
+                from datathon.modeling.spike_classifier import SpikeClassifier
+
+                spike_classifier = SpikeClassifier()
+                spike_classifier.fit(df[feature_cols], df["revenue"])
+
             Trainer.save_artifacts(
                 model_dir=model_dir,
                 forecaster=forecaster_fitted,
@@ -292,11 +411,48 @@ def run(options: CompareOptions) -> None:
                 cv_results=all_results.get(model_type),
                 cogs_column=cogs_column,
                 target_transform=target_transform,
+                sequential_cogs=model_config.get("sequential_cogs", False),
+                restart_horizon=model_config.get("restart_horizon"),
+                forecast_mode=forecast_mode,
+                spike_classifier=spike_classifier,
             )
             console.print(f"  [green]{model_type}[/green] saved to {model_dir}")
 
             if tracker.enabled:
                 tracker.log_model(model_dir, artifact_path=f"models/{model_type}")
+
+        # Save stacked ensemble if stacking was trained
+        if meta_rev is not None and meta_cogs is not None:
+            from datathon.modeling.forecasters.stacking import StackingForecaster
+
+            stack_dir = options.model_dir / "stacked"
+            stack_dir.mkdir(parents=True, exist_ok=True)
+            members = []
+            for model_type in available:
+                model_path = options.model_dir / model_type
+                forecaster, _cols, _loaded_type, _cogs_col, _transform, _seq, _rh, _fm, _spk = (
+                    Trainer.load_artifacts(model_path)
+                )
+                members.append(forecaster)
+            stacked = StackingForecaster(members=members, meta_rev=meta_rev, meta_cogs=meta_cogs)
+            stacked.save(stack_dir / "forecaster.pkl")
+            # Load feature cols from first model
+            _fc, feature_cols, _mt, _cc, _tt, _sc, _rh, _fm, _spk = Trainer.load_artifacts(
+                options.model_dir / available[0]
+            )
+            Trainer.save_artifacts(
+                model_dir=stack_dir,
+                forecaster=stacked,
+                feature_cols=feature_cols,
+                model_type="stacked",
+                cv_results=all_results.get("stacked"),
+                cogs_column=cogs_column,
+                target_transform=target_transform,
+                sequential_cogs=False,
+                restart_horizon=restart_horizon,
+                forecast_mode=forecast_mode,
+            )
+            console.print(f"  [green]stacked[/green] saved to {stack_dir}")
 
         if tracker.enabled:
             for model_type, results in all_results.items():
@@ -313,6 +469,32 @@ def run(options: CompareOptions) -> None:
             tracker.set_tag("status", "compared")
 
         # Generate submission from the true winner
+        scaffold = load_scaffold(options.warehouse)
+        if config.get("promo_features", False):
+            from datathon.utils.data_loaders import _apply_promo_features_to_scaffold
+
+            scaffold = _apply_promo_features_to_scaffold(scaffold, options.warehouse)
+
+        def _make_predictions(forecaster, feature_cols, cogs_is_ratio, trans):
+            if forecast_mode == "direct":
+                return direct_forecast(
+                    forecaster=forecaster,
+                    history=df,
+                    scaffold=scaffold,
+                    feature_cols=feature_cols,
+                    cogs_is_ratio=cogs_is_ratio,
+                    target_transform=trans,
+                )
+            return recursive_forecast(
+                forecaster=forecaster,
+                history=df,
+                scaffold=scaffold,
+                feature_cols=feature_cols,
+                cogs_is_ratio=cogs_is_ratio,
+                target_transform=trans,
+                restart_horizon=restart_horizon,
+            )
+
         if winner == "ensemble":
             console.print(
                 f"\n[bold]Ensemble won CV — generating weighted ensemble submission "
@@ -323,39 +505,91 @@ def run(options: CompareOptions) -> None:
             cogs_is_ratio = False
             for model_type in available:
                 model_path = options.model_dir / model_type
-                forecaster, cols, _loaded_type, cogs_col, _transform = Trainer.load_artifacts(
-                    model_path
+                forecaster, cols, _loaded_type, cogs_col, _transform, _seq, _rh, _fm, _spk = (
+                    Trainer.load_artifacts(model_path)
                 )
                 members.append(forecaster)
                 if feature_cols is None:
                     feature_cols = cols
                     cogs_is_ratio = cogs_col == "cogs_ratio"
             ensemble = EnsembleForecaster(members=members, weights=list(ensemble_weights))
-            scaffold = load_scaffold(options.warehouse)
-            predictions = recursive_forecast(
-                forecaster=ensemble,
-                history=df,
-                scaffold=scaffold,
-                feature_cols=feature_cols,
-                cogs_is_ratio=cogs_is_ratio,
-                target_transform=target_transform,
+            predictions = _make_predictions(ensemble, feature_cols, cogs_is_ratio, target_transform)
+        elif winner == "stacked":
+            console.print(
+                "\n[bold]Stacked ensemble won CV — generating stacked submission …[/bold]"
+            )
+            from datathon.modeling.forecasters.stacking import StackingForecaster
+
+            stack_dir = options.model_dir / "stacked"
+            (
+                stacked_fitted,
+                feature_cols,
+                _mt,
+                winner_cogs_col,
+                winner_transform,
+                _seq,
+                _rh,
+                _fm,
+                _spk,
+            ) = Trainer.load_artifacts(stack_dir)
+            winner_cogs_is_ratio = winner_cogs_col == "cogs_ratio"
+            predictions = _make_predictions(
+                stacked_fitted, feature_cols, winner_cogs_is_ratio, winner_transform
             )
         else:
             console.print(f"\n[bold]{winner}[/bold] won CV — generating winner submission …")
             winner_dir = options.model_dir / winner
-            winner_fitted, feature_cols, _model_type, winner_cogs_col, winner_transform = (
-                Trainer.load_artifacts(winner_dir)
-            )
+            (
+                winner_fitted,
+                feature_cols,
+                _model_type,
+                winner_cogs_col,
+                winner_transform,
+                _seq,
+                _rh,
+                _fm,
+                winner_spike,
+            ) = Trainer.load_artifacts(winner_dir)
             winner_cogs_is_ratio = winner_cogs_col == "cogs_ratio"
-            scaffold = load_scaffold(options.warehouse)
-            predictions = recursive_forecast(
-                forecaster=winner_fitted,
-                history=df,
-                scaffold=scaffold,
-                feature_cols=feature_cols,
-                cogs_is_ratio=winner_cogs_is_ratio,
-                target_transform=winner_transform,
+            predictions = _make_predictions(
+                winner_fitted, feature_cols, winner_cogs_is_ratio, winner_transform
             )
+            # Apply spike boost if the winner model has a spike classifier
+            if winner_spike is not None:
+                console.print("Applying spike boost …")
+                from datathon.modeling.recursive import _prepare_future_frame
+
+                future_frame = _prepare_future_frame(df, scaffold)
+                promo_cols = [c for c in feature_cols if c.startswith("promo_")]
+                if promo_cols and any(c in scaffold.columns for c in promo_cols):
+                    scaffold_indexed = scaffold.set_index("date")
+                    future_frame_indexed = future_frame.set_index("sales_date")
+                    for col in promo_cols:
+                        if col in scaffold_indexed.columns:
+                            future_frame_indexed[col] = scaffold_indexed[col].values
+                    future_frame = future_frame_indexed.reset_index()
+                static_cols = [c for c in feature_cols if c in future_frame.columns]
+                if static_cols:
+                    spike_prob = winner_spike.predict_proba(future_frame[static_cols])
+                    old_revenue = predictions["revenue"].to_numpy().copy()
+                    old_cogs = (
+                        predictions["cogs"].to_numpy().copy()
+                        if "cogs" in predictions.columns
+                        else None
+                    )
+                    predictions["revenue"] = winner_spike.apply_boost(old_revenue, spike_prob)
+                    if winner_cogs_is_ratio and old_cogs is not None:
+                        ratio = np.divide(
+                            old_cogs,
+                            old_revenue,
+                            out=np.zeros_like(old_cogs),
+                            where=old_revenue != 0,
+                        )
+                        ratio = np.clip(ratio, 0.0, 2.0)
+                        predictions["cogs"] = predictions["revenue"].to_numpy() * ratio
+                    console.print(
+                        f"  Spike boost applied (max boost: {winner_spike.max_boost:.2f})"
+                    )
 
         expected = submission_columns()
         submission = predictions.rename(

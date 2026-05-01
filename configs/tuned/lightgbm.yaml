@@ -1,0 +1,16 @@
+models:
+  lightgbm:
+    learning_rate: 0.1503313403335506
+    num_leaves: 135
+    max_depth: 8
+    min_child_samples: 11
+    subsample: 0.9219657367082886
+    colsample_bytree: 0.5302912403492581
+    reg_alpha: 5.495589394615239e-07
+    reg_lambda: 3.017995832166311e-05
+    n_estimators: 34
+    objective: huber
+    alpha: 0.9
+    verbose: -1
+    n_jobs: 8
+    early_stopping_rounds: 50

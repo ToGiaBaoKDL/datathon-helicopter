@@ -26,7 +26,8 @@ with base as (
         cos(2 * pi() * month / 12) as month_cos,
         datediff('day', date '2019-01-01', sales_date) as days_since_2019,
         case when day_of_month <= 3 then 1 else 0 end as is_month_start_window,
-        case when days_to_month_end <= 4 then 1 else 0 end as is_month_end_window
+        case when days_to_month_end <= 4 then 1 else 0 end as is_month_end_window,
+        case when day_of_month >= 25 or day_of_month <= 5 then 1 else 0 end as is_pay_day
     from {{ ref('mart_forecast_daily_base') }}
 ),
 
@@ -218,7 +219,8 @@ calendar as (
         coalesce(sn.days_to_next_sale, 999) as days_to_next_sale,
         coalesce(sp.days_since_last_sale, 999) as days_since_last_sale,
         coalesce(pf.is_peak_season, 0) as is_peak_season,
-        coalesce(pf.peak_proximity, 0.0) as peak_proximity
+        coalesce(pf.peak_proximity, 0.0) as peak_proximity,
+        b.is_pay_day
     from ratios as b
     cross join global_stats as gs
     left join dow_profiles as dp on b.day_of_week = dp.day_of_week
@@ -273,20 +275,17 @@ base_with_lags as (
         days_since_last_sale,
         is_peak_season,
         peak_proximity,
+        is_pay_day,
 
         lag(revenue, 1) over (order by sales_date) as lag_1d_revenue,
         lag(revenue, 2) over (order by sales_date) as lag_2d_revenue,
         lag(revenue, 3) over (order by sales_date) as lag_3d_revenue,
         lag(revenue, 7) over (order by sales_date) as lag_7d_revenue,
-        lag(revenue, 8) over (order by sales_date) as lag_8d_revenue,
-        lag(revenue, 29) over (order by sales_date) as lag_29d_revenue,
         lag(revenue, 14) over (order by sales_date) as lag_14d_revenue,
         lag(revenue, 28) over (order by sales_date) as lag_28d_revenue,
         lag(revenue, 90) over (order by sales_date) as lag_90d_revenue,
         lag(revenue, 180) over (order by sales_date) as lag_180d_revenue,
-        lag(revenue, 364) over (order by sales_date) as lag_364d_revenue,
         lag(revenue, 365) over (order by sales_date) as lag_365d_revenue,
-        lag(revenue, 366) over (order by sales_date) as lag_366d_revenue,
         lag(revenue, 730) over (order by sales_date) as lag_730d_revenue,
 
         lag(cogs, 1) over (order by sales_date) as lag_1d_cogs,
@@ -295,12 +294,7 @@ base_with_lags as (
         lag(cogs, 365) over (order by sales_date) as lag_365d_cogs,
         lag(cogs, 730) over (order by sales_date) as lag_730d_cogs,
 
-        lag(cogs_ratio, 1) over (order by sales_date) as lag_1d_cogs_ratio,
-
-        -- Exogenous lags (730d = fully safe for 548-day horizon)
-        lag(order_count, 730) over (order by sales_date) as lag_730d_order_count,
-        lag(units_sold, 730) over (order by sales_date) as lag_730d_units_sold,
-        lag(sessions, 730) over (order by sales_date) as lag_730d_sessions
+        lag(cogs_ratio, 1) over (order by sales_date) as lag_1d_cogs_ratio
     from calendar
 ),
 
@@ -346,20 +340,17 @@ lagged as (
         days_since_last_sale,
         is_peak_season,
         peak_proximity,
+        is_pay_day,
 
         lag_1d_revenue,
         lag_2d_revenue,
         lag_3d_revenue,
         lag_7d_revenue,
-        lag_8d_revenue,
         lag_14d_revenue,
         lag_28d_revenue,
-        lag_29d_revenue,
         lag_90d_revenue,
         lag_180d_revenue,
-        lag_364d_revenue,
         lag_365d_revenue,
-        lag_366d_revenue,
         lag_730d_revenue,
 
         lag_1d_cogs,
@@ -367,24 +358,6 @@ lagged as (
         lag_28d_cogs,
         lag_365d_cogs,
         lag_730d_cogs,
-
-        -- Exogenous lags (730d safe for 548-day horizon)
-        lag_730d_order_count,
-        lag_730d_units_sold,
-        lag_730d_sessions,
-
-        -- Day-of-month ratio (how much above/below typical for this day-of-month)
-        case when hist_avg_revenue_dom is null or hist_avg_revenue_dom = 0 then null
-             else revenue / hist_avg_revenue_dom
-        end as day_of_month_ratio,
-
-        -- Revenue rolling windows
-        avg(lag_1d_revenue) over (
-            order by sales_date rows between 29 preceding and current row
-        ) as roll_mean_30d_revenue,
-        stddev_samp(lag_1d_revenue) over (
-            order by sales_date rows between 29 preceding and current row
-        ) as roll_std_30d_revenue,
 
         -- COGS ratio rolling
         avg(lag_1d_cogs_ratio) over (
@@ -399,12 +372,18 @@ lagged as (
 
         lag_1d_cogs_ratio,
 
-        -- Growth ratios
-        case when lag_8d_revenue is null or lag_8d_revenue = 0 then null
-             else lag_1d_revenue / lag_8d_revenue - 1
+        -- Growth ratios (computed inline without materialising lag_8d / lag_29d)
+        case
+            when lag(revenue, 8) over (order by sales_date) is null
+              or lag(revenue, 8) over (order by sales_date) = 0
+            then null
+            else lag_1d_revenue / lag(revenue, 8) over (order by sales_date) - 1
         end as lag_1d_rev_wow_growth,
-        case when lag_29d_revenue is null or lag_29d_revenue = 0 then null
-             else lag_1d_revenue / lag_29d_revenue - 1
+        case
+            when lag(revenue, 29) over (order by sales_date) is null
+              or lag(revenue, 29) over (order by sales_date) = 0
+            then null
+            else lag_1d_revenue / lag(revenue, 29) over (order by sales_date) - 1
         end as lag_1d_rev_mom_growth,
         case when lag_365d_revenue is null or lag_365d_revenue = 0 then null
              else lag_1d_revenue / lag_365d_revenue - 1
@@ -432,13 +411,7 @@ lagged as (
         end as naive_revenue_residual,
         case when lag_365d_cogs is null then null
              else cogs - lag_365d_cogs
-        end as naive_cogs_residual,
-
-        -- YoY delta and rolling
-        lag_1d_revenue - lag_365d_revenue as rev_yoy_delta,
-        case when lag_730d_revenue is null or lag_730d_revenue = 0 then null
-             else lag_365d_revenue / lag_730d_revenue - 1
-        end as rev_2yr_ratio
+        end as naive_cogs_residual
     from base_with_lags
 ),
 
@@ -446,12 +419,8 @@ with_residual_lags as (
     select
         *,
         lag(revenue_residual, 1) over (order by sales_date) as lag_1d_rev_residual,
-        lag(revenue_residual, 2) over (order by sales_date) as lag_2d_rev_residual,
-        lag(revenue_residual, 3) over (order by sales_date) as lag_3d_rev_residual,
         lag(revenue_residual, 7) over (order by sales_date) as lag_7d_rev_residual,
         lag(cogs_residual, 1) over (order by sales_date) as lag_1d_cogs_residual,
-        lag(cogs_residual, 2) over (order by sales_date) as lag_2d_cogs_residual,
-        lag(cogs_residual, 3) over (order by sales_date) as lag_3d_cogs_residual,
         lag(cogs_residual, 7) over (order by sales_date) as lag_7d_cogs_residual
     from lagged
 ),

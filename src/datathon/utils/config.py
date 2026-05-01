@@ -39,10 +39,16 @@ def load_modeling_config(path: Path | None = None) -> dict[str, Any]:
 def resolve_targets(config: dict[str, Any]) -> tuple[str, str, str, bool]:
     """Determine revenue / COGS target columns and transform mode."""
     target_transform = config.get("target_transform", "identity")
-    valid_transforms = ("identity", "residual", "log")
+    valid_transforms = ("identity", "residual", "log", "log_residual")
     if target_transform not in valid_transforms:
         raise ValueError(
             f"target_transform must be one of {valid_transforms}. Got: {target_transform!r}"
+        )
+
+    if target_transform == "log_residual" and not config.get("prophet_baseline", False):
+        raise ValueError(
+            "target_transform='log_residual' requires prophet_baseline=true. "
+            "The log-space baseline is only provided by Prophet."
         )
 
     cogs_target = config.get("cogs_target", "absolute")
@@ -50,31 +56,52 @@ def resolve_targets(config: dict[str, Any]) -> tuple[str, str, str, bool]:
 
     if cogs_is_ratio:
         cogs_column = "cogs_ratio"
-    elif target_transform == "residual":
+    elif target_transform in ("residual", "log_residual"):
         cogs_column = "cogs_residual"
     elif target_transform == "log":
         cogs_column = "log_cogs"
     else:
         cogs_column = "cogs"
 
-    if target_transform == "residual":
+    if target_transform in ("residual", "log_residual"):
         revenue_column = "revenue_residual"
     elif target_transform == "log":
         revenue_column = "log_revenue"
     else:
         revenue_column = "revenue"
 
-    # Backward compat: residual + ratio is still discouraged
-    if target_transform == "residual" and cogs_is_ratio:
-        raise ValueError(
-            "Invalid config: cogs_target='ratio' + target_transform='residual' is an anti-pattern. "
-            "When predicting residual revenue, COGS should also be predicted as a residual "
-            "(cogs_target='absolute') so that revenue and COGS are independent deviations "
-            "from their respective YoY baselines. "
-            "Set cogs_target='absolute' in configs/modeling.yaml."
+    sequential_cogs = config.get("sequential_cogs", False)
+    if sequential_cogs and cogs_is_ratio:
+        import warnings
+
+        warnings.warn(
+            "Anti-pattern detected: sequential_cogs=true with cogs_target='ratio'. "
+            "SequentialForecaster feeds predicted_revenue into the COGS model, "
+            "but ratio mode reconstructs COGS = revenue * ratio. This creates "
+            "redundant information and can hurt performance. "
+            "Recommended: set cogs_target='absolute' when sequential_cogs=true.",
+            stacklevel=3,
         )
 
     return revenue_column, cogs_column, target_transform, cogs_is_ratio
+
+
+def merge_model_config(base_config: dict[str, Any], model_type: str) -> dict[str, Any]:
+    """Return a copy of *base_config* with per-model tuned params overlaid.
+
+    Looks for ``configs/tuned/{model_type}.yaml`` and deep-merges it.
+    If the file does not exist, returns ``base_config`` unchanged.
+    """
+    from datathon.utils.paths import configs_dir
+
+    tuned_path = configs_dir() / "tuned" / f"{model_type}.yaml"
+    if not tuned_path.exists():
+        return dict(base_config)
+
+    merged = dict(base_config)
+    overlay = _load_yaml(tuned_path)
+    _deep_merge(merged, overlay)
+    return merged
 
 
 def load_tracking_config() -> dict[str, Any]:

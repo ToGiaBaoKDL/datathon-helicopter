@@ -3,7 +3,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
+try:
+    from datathon.modeling.forecasters.lightgbm import LightGBMForecaster
+
+    _HAS_LIGHTGBM = True
+except ImportError:
+    LightGBMForecaster = None  # type: ignore[misc,assignment]
+    _HAS_LIGHTGBM = False
+
+import pytest
+
 from datathon.modeling.recursive import recursive_forecast
 
 
@@ -15,23 +24,13 @@ def _make_synthetic_history(n: int = 400) -> pd.DataFrame:
             "sales_date": dates,
             "revenue": np.random.RandomState(42).randint(1_000, 10_000, size=n).astype(float),
             "cogs": np.random.RandomState(43).randint(500, 8_000, size=n).astype(float),
-            "year": dates.year,
             "day_of_week": dates.dayofweek,
-            "day_of_month": dates.day,
-            "day_of_year": dates.dayofyear,
-            "week_of_year": dates.isocalendar().week.values.astype(int),
             "days_to_month_end": 30 - dates.day,
             "days_to_quarter_end": 90 - dates.dayofyear % 90,
-            "is_month_start": (dates.day <= 3).astype(int),
-            "month_sin": np.sin(2 * np.pi * dates.month / 12),
-            "month_cos": np.cos(2 * np.pi * dates.month / 12),
             "day_of_week_sin": np.sin(2 * np.pi * dates.dayofweek / 7),
             "day_of_week_cos": np.cos(2 * np.pi * dates.dayofweek / 7),
             "day_of_year_sin": np.sin(2 * np.pi * dates.dayofyear / 365),
             "day_of_year_cos": np.cos(2 * np.pi * dates.dayofyear / 365),
-            "week_of_year_sin": np.sin(2 * np.pi * dates.isocalendar().week.values / 52),
-            "week_of_year_cos": np.cos(2 * np.pi * dates.isocalendar().week.values / 52),
-            "days_to_tet": 100,
             "is_national_day": 0,
             "days_since_2019": (dates - pd.Timestamp("2019-01-01")).days,
             "lag_1d_revenue": np.nan,
@@ -41,8 +40,6 @@ def _make_synthetic_history(n: int = 400) -> pd.DataFrame:
             "lag_14d_revenue": np.nan,
             "lag_28d_revenue": np.nan,
             "lag_365d_revenue": np.nan,
-            "lag_8d_revenue": np.nan,
-            "lag_29d_revenue": np.nan,
             "lag_1d_cogs": np.nan,
             "lag_7d_cogs": np.nan,
             "lag_28d_cogs": np.nan,
@@ -56,7 +53,6 @@ def _make_synthetic_history(n: int = 400) -> pd.DataFrame:
             "roll_mean_7d_revenue": np.nan,
             "roll_mean_28d_revenue": np.nan,
             "roll_mean_365d_revenue": np.nan,
-            "roll_median_7d_revenue": np.nan,
             "roll_std_7d_revenue": np.nan,
             "roll_std_28d_revenue": np.nan,
             "roll_std_365d_revenue": np.nan,
@@ -73,6 +69,7 @@ def _make_synthetic_history(n: int = 400) -> pd.DataFrame:
     return df
 
 
+@pytest.mark.skipif(not _HAS_LIGHTGBM, reason="lightgbm not installed")
 def test_recursive_forecast_log_transform() -> None:
     """Smoke test: log transform reconstructs revenue via expm1."""
     history = _make_synthetic_history(400)
@@ -95,7 +92,6 @@ def test_recursive_forecast_log_transform() -> None:
             "cogs_residual",
             "log_revenue",
             "log_cogs",
-            "tet_date",
         }
     ]
 

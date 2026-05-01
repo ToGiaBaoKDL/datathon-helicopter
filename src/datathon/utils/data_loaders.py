@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from datathon.utils.duckdb_io import connect
-from datathon.utils.paths import warehouse_path
+from datathon.utils.paths import models_dir, warehouse_path
 
 
 def load_modeling_data(warehouse: Path | None = None) -> pd.DataFrame:
@@ -46,6 +46,117 @@ def _ensure_derived_targets(df: pd.DataFrame, target_transform: str) -> pd.DataF
     return df
 
 
+def _fit_prophet_baseline(
+    df: pd.DataFrame, warehouse: Path | None = None, log_transform: bool = False
+) -> object:
+    """Fit or load cached Prophet baseline models.
+
+    The cache is invalidated when the DuckDB warehouse file is newer than
+    the cache, ensuring Prophet is refit after dbt rebuilds.
+    """
+    from datathon.modeling.prophet_baseline import ProphetBaseline
+
+    cache_path = models_dir() / "prophet_baseline.pkl"
+    wh = warehouse or warehouse_path()
+
+    if cache_path.exists() and wh.exists():
+        cache_mtime = cache_path.stat().st_mtime
+        wh_mtime = wh.stat().st_mtime
+        if cache_mtime >= wh_mtime:
+            pb = ProphetBaseline.load(cache_path)
+            # Invalidate cache if log_transform mismatch
+            if getattr(pb, "_log_transform", False) == log_transform:
+                return pb
+
+    pb = ProphetBaseline()
+    pb.fit(df, log_transform=log_transform)
+    pb.save(cache_path)
+    return pb
+
+
+def _apply_prophet_baseline(
+    df: pd.DataFrame, warehouse: Path | None = None, log_transform: bool = False
+) -> pd.DataFrame:
+    """Overwrite additive decomposition baselines with Prophet predictions."""
+    pb = _fit_prophet_baseline(df, warehouse, log_transform=log_transform)
+    baseline_df = pb.predict_history(df)
+
+    df = df.merge(baseline_df, on="sales_date", how="left")
+    # Overwrite additive decomposition baselines
+    if log_transform:
+        # Prophet baselines are in log-space; keep both log and raw variants
+        df["log_revenue_baseline"] = df["prophet_revenue_baseline"]
+        df["log_cogs_baseline"] = df["prophet_cogs_baseline"]
+        df["revenue_baseline"] = np.expm1(df["prophet_revenue_baseline"])
+        df["cogs_baseline"] = np.expm1(df["prophet_cogs_baseline"])
+        # Recompute residuals in log space
+        df["revenue_residual"] = np.log1p(df["revenue"]) - df["log_revenue_baseline"]
+        df["cogs_residual"] = np.log1p(df["cogs"]) - df["log_cogs_baseline"]
+    else:
+        df["revenue_baseline"] = df["prophet_revenue_baseline"]
+        df["cogs_baseline"] = df["prophet_cogs_baseline"]
+        if "log_revenue_baseline" in df.columns:
+            df["log_revenue_baseline"] = np.log1p(df["prophet_revenue_baseline"].clip(lower=0))
+        if "log_cogs_baseline" in df.columns:
+            df["log_cogs_baseline"] = np.log1p(df["prophet_cogs_baseline"].clip(lower=0))
+        # Recompute residuals in raw space
+        df["revenue_residual"] = df["revenue"] - df["revenue_baseline"]
+        df["cogs_residual"] = df["cogs"] - df["cogs_baseline"]
+    return df
+
+
+def _apply_promo_features(df: pd.DataFrame, warehouse: Path | None = None) -> pd.DataFrame:
+    """Merge daily promo intensity features into the modeling DataFrame."""
+    from datathon.features.promo_features import build_promo_features
+
+    return build_promo_features(df, warehouse=warehouse)
+
+
+def _apply_promo_features_to_scaffold(
+    scaffold: pd.DataFrame, warehouse: Path | None = None
+) -> pd.DataFrame:
+    """Merge daily promo intensity features into the forecast scaffold.
+
+    Future promo schedule is predicted from historical patterns (odd/even
+    year detection + median timing/duration) so the model sees the same
+    promo signal at inference time that it saw during training.
+    """
+    from datathon.features.promo_features import _build_future_promo, _load_promotions
+
+    promo_df = _load_promotions(warehouse)
+    fill_cols = [
+        "promo_count",
+        "promo_max_discount",
+        "promo_mean_discount",
+        "promo_max_min_order_value",
+        "promo_stackable_count",
+        "is_promo",
+    ]
+
+    if promo_df.empty:
+        for col in fill_cols:
+            scaffold[col] = 0.0
+        return scaffold
+
+    scaffold = scaffold.copy()
+    scaffold["date"] = pd.to_datetime(scaffold["date"])
+
+    future_start = int(scaffold["date"].min().year)
+    future_end = int(scaffold["date"].max().year)
+    future_daily = _build_future_promo(promo_df, future_start, future_end)
+
+    scaffold = scaffold.merge(
+        future_daily.rename(columns={"sales_date": "date"}),
+        on="date",
+        how="left",
+    )
+    for col in fill_cols:
+        if col not in scaffold.columns:
+            scaffold[col] = 0.0
+    scaffold[fill_cols] = scaffold[fill_cols].fillna(0.0)
+    return scaffold
+
+
 def load_training_data(
     config: dict | None = None,
     warehouse: Path | None = None,
@@ -56,6 +167,13 @@ def load_training_data(
     if config is not None:
         target_transform = config.get("target_transform", "identity")
         df = _ensure_derived_targets(df, target_transform)
+
+        if config.get("prophet_baseline", False):
+            log_transform = config.get("target_transform") == "log_residual"
+            df = _apply_prophet_baseline(df, warehouse, log_transform=log_transform)
+
+        if config.get("promo_features", False):
+            df = _apply_promo_features(df, warehouse)
 
         start_date = config.get("train_start_date")
         if start_date is not None:

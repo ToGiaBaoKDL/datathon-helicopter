@@ -54,4 +54,52 @@ order by sales_date
     yFmt="num0"
 />
 
+```sql baseline_compare
+select
+    sales_date,
+    revenue,
+    revenue_baseline,
+    lag_1d_revenue,
+    revenue - revenue_baseline as revenue_residual
+from datathon_warehouse.mart_forecast_daily_features
+order by sales_date
+```
+
+```sql revenue_baseline_long
+select sales_date, 'Revenue (Actual)' as metric, revenue as value
+from datathon_warehouse.mart_forecast_daily_features
+union all
+select sales_date, 'Revenue Baseline' as metric, revenue_baseline as value
+from datathon_warehouse.mart_forecast_daily_features
+union all
+select sales_date, 'Naive (Lag 1d)' as metric, lag_1d_revenue as value
+from datathon_warehouse.mart_forecast_daily_features
+order by sales_date
+```
+
+<LineChart
+    data={revenue_baseline_long}
+    x=sales_date
+    y=value
+    series=metric
+    yAxisTitle="Revenue"
+    xAxisTitle="Date"
+    title="Actual Revenue vs Baseline Predictions"
+    subtitle="Baseline = additive seasonal decomposition (dow + month - overall) from SQL mart"
+    yFmt="num0"
+/>
+
+```sql residual_stats
+select
+    avg(abs(revenue - revenue_baseline))::int as mae_baseline,
+    avg(abs(revenue - lag_1d_revenue))::int as mae_naive_1d,
+    avg(abs(revenue - lag_7d_revenue))::int as mae_naive_7d,
+    avg(abs(revenue - lag_365d_revenue))::int as mae_naive_365d,
+    round(avg((revenue - revenue_baseline) / nullif(revenue, 0)) * 100, 2) as avg_pct_error_baseline
+from datathon_warehouse.mart_forecast_daily_features
+where lag_1d_revenue is not null
+```
+
+<DataTable data={residual_stats} rows=10 />
+
 <DataTable data={lag_view} rows=10 />

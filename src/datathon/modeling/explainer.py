@@ -64,6 +64,7 @@ def explain_forecaster(
     output_dir: Path | None = None,
     sample_size: int | None = 500,
     max_display: int = 20,
+    feature_cols: list[str] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Run SHAP explainability on a fitted forecaster.
 
@@ -99,13 +100,15 @@ def explain_forecaster(
             "model_rev and model_cogs attributes."
         )
 
-    cols = feature_columns(history)
+    cols = feature_cols if feature_cols is not None else feature_columns(history)
+    # Only keep columns that exist in the history dataframe
+    cols = [c for c in cols if c in history.columns]
     X = history[cols].copy()
 
     X_bg = (
         X.sample(n=sample_size, random_state=42)
         if sample_size is not None and len(X) > sample_size
-        else X
+        else X.copy()
     )
 
     out: dict[str, pd.DataFrame] = {}
@@ -113,17 +116,26 @@ def explain_forecaster(
         ("revenue", forecaster.model_rev),
         ("cogs", forecaster.model_cogs),
     ):
+        X_shap = X_bg.copy()
+        # Sequential COGS: the cogs model was trained with an extra
+        # ``predicted_revenue`` feature produced by the revenue model.
+        if target == "cogs" and hasattr(model, "n_features_") and model.n_features_ > len(cols):
+            pred_rev = forecaster.model_rev.predict(X_bg)
+            X_shap["predicted_revenue"] = pred_rev
+            # Re-order so column order matches training (predicted_revenue last)
+            X_shap = X_shap[cols + ["predicted_revenue"]]
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             explainer = shap_lib.TreeExplainer(model)
-            shap_values = explainer.shap_values(X_bg)
+            shap_values = explainer.shap_values(X_shap)
 
         if output_dir is not None:
-            _save_shap_plots(shap_values, X_bg, target, output_dir, max_display)
+            _save_shap_plots(shap_values, X_shap, target, output_dir, max_display)
 
         if isinstance(shap_values, list):
             shap_values = shap_values[0]
-        mean_abs = pd.Series(shap_values.mean(axis=0), index=cols)
+        mean_abs = pd.Series(shap_values.mean(axis=0), index=X_shap.columns)
         mean_abs = mean_abs.abs().sort_values(ascending=False).reset_index()
         mean_abs.columns = ["feature", "mean_abs_shap"]
         out[target] = mean_abs

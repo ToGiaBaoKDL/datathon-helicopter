@@ -17,15 +17,16 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
         self._early_stopping_rounds = xgb_kwargs.pop("early_stopping_rounds", 50)
         self._xgb_kwargs = xgb_kwargs
 
-    def fit(self, X, y_rev, y_cogs, eval_set=None):
+    def fit(self, X, y_rev, y_cogs, eval_set=None, sample_weight=None):
         rev_kwargs = dict(self._xgb_kwargs)
         cogs_kwargs = dict(self._xgb_kwargs)
-        # Ensure reproducibility
         if "random_state" not in rev_kwargs:
             rev_kwargs["random_state"] = 42
         if "random_state" not in cogs_kwargs:
             cogs_kwargs["random_state"] = 42
 
+        fit_rev: dict = {}
+        fit_cogs: dict = {}
         if eval_set is not None:
             X_val, y_rev_val, y_cogs_val = eval_set
             rev_kwargs["callbacks"] = [
@@ -36,9 +37,10 @@ class XGBoostForecaster(_DualTargetForecasterMixin, BaseForecaster):
             ]
             fit_rev = {"eval_set": [(X_val, y_rev_val)], "verbose": False}
             fit_cogs = {"eval_set": [(X_val, y_cogs_val)], "verbose": False}
-        else:
-            fit_rev = {}
-            fit_cogs = {}
+
+        if sample_weight is not None:
+            fit_rev["sample_weight"] = sample_weight
+            fit_cogs["sample_weight"] = sample_weight
 
         self.model_rev = xgb.XGBRegressor(**rev_kwargs)
         self.model_cogs = xgb.XGBRegressor(**cogs_kwargs)

@@ -90,7 +90,7 @@ def print_help() -> None:
         f"[dim]Available model types:[/dim] {', '.join(list_forecasters())}\n"
         "[dim]evaluate[/dim]   Run cross-validation and print metrics.\n"
         "[dim]train-final[/dim] Train on full history and save model artifacts.\n"
-        "[dim]--cv-type[/dim]      'expanding' (default) or 'sliding' (fixed training window).\n"
+        "[dim]--cv-type[/dim]      'sliding' (default) or 'expanding'.\n"
         "[dim]--train-window-days[/dim]  Training window for 'sliding' CV (default 1096).\n"
         "[dim]--purge-days[/dim]   Purge gap between train/val to reduce autocorrelation leakage.\n"
         "[dim]--config[/dim]   Optional modeling config path "
@@ -168,6 +168,14 @@ def run(options: TrainOptions) -> None:
 
     revenue_column, cogs_column, target_transform, cogs_is_ratio = resolve_targets(config)
 
+    console.print(
+        f"Config: target_transform=[bold]{target_transform}[/bold] | "
+        f"cogs_target=[bold]{cogs_column}[/bold] | "
+        f"sequential_cogs=[bold]{config.get('sequential_cogs', False)}[/bold] | "
+        f"cv=[bold]{options.cv_type}[/bold] | "
+        f"restart_horizon=[bold]{config.get('restart_horizon', 'null')}[/bold]"
+    )
+
     forecaster = build_forecaster(options.model_type, config)
     cv = build_cv(
         options.n_folds,
@@ -176,11 +184,13 @@ def run(options: TrainOptions) -> None:
         options.train_window_days,
         options.purge_days,
     )
+    forecast_mode = config.get("forecast_mode", "recursive")
     trainer = Trainer(
         forecaster=forecaster,
         cv=cv,
         cogs_column=cogs_column,
         target_transform=target_transform,
+        forecast_mode=forecast_mode,
     )
 
     tracker = MlflowTracker(run_name=f"train_{options.model_type}_{options.mode}")
@@ -194,8 +204,12 @@ def run(options: TrainOptions) -> None:
             tracker.log_param("purge_days", options.purge_days)
             tracker.log_config(config)
 
+        restart_horizon = config.get("restart_horizon")
+
         if options.mode == "evaluate":
-            model_results = trainer.run_cv(df, tracker=tracker)
+            model_results = trainer.run_cv(
+                df, tracker=tracker, sample_weight=True, restart_horizon=restart_horizon
+            )
             naive_results = _evaluate_baseline_on_splits(df, cv)
             _print_comparison(model_results, naive_results, options.model_type, options.cv_type)
 
@@ -206,7 +220,20 @@ def run(options: TrainOptions) -> None:
 
         if options.mode == "train-final":
             console.print("\nTraining final models on full history …")
-            forecaster, feature_cols = trainer.train_final(df)
+            forecaster, feature_cols = trainer.train_final(df, sample_weight=True)
+
+            spike_classifier = None
+            if config.get("spike_classifier", False):
+                console.print("Training spike classifier …")
+                from datathon.modeling.spike_classifier import SpikeClassifier
+
+                spike_classifier = SpikeClassifier()
+                spike_classifier.fit(df[feature_cols], df["revenue"])
+                console.print(
+                    f"  Spike threshold: {spike_classifier.threshold_:,.0f} | "
+                    f"Empirical boost: {spike_classifier.empirical_boost_:.3f}"
+                )
+
             Trainer.save_artifacts(
                 model_dir=options.model_dir,
                 forecaster=forecaster,
@@ -215,6 +242,10 @@ def run(options: TrainOptions) -> None:
                 cv_results=model_results,
                 cogs_column=cogs_column,
                 target_transform=target_transform,
+                sequential_cogs=config.get("sequential_cogs", False),
+                restart_horizon=config.get("restart_horizon"),
+                forecast_mode=forecast_mode,
+                spike_classifier=spike_classifier,
             )
             console.print(f"Artifacts saved to [bold]{options.model_dir}[/bold]")
 

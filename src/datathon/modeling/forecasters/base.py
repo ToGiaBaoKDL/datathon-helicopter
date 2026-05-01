@@ -20,6 +20,7 @@ class BaseForecaster(ABC):
         y_rev: pd.Series,
         y_cogs: pd.Series,
         eval_set: tuple[pd.DataFrame, pd.Series, pd.Series] | None = None,
+        sample_weight: np.ndarray | None = None,
     ) -> None:
         """Fit the forecaster on training features and dual targets.
 
@@ -29,6 +30,9 @@ class BaseForecaster(ABC):
             Optional validation tuple ``(X_val, y_rev_val, y_cogs_val)``.
             When provided, the implementation should use early stopping
             based on the validation loss.
+        sample_weight:
+            Optional array of per-sample weights.  Heavier weights give
+            the sample more influence during training.
         """
 
     @abstractmethod

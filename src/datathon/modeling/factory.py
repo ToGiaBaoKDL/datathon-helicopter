@@ -18,5 +18,11 @@ def build_forecaster(model_type: str, config: dict[str, Any]) -> Any:
             f"Model type '{model_type}' not found in config['models']. "
             f"Available: {list(config.get('models', {}).keys())}"
         )
+
+    if config.get("sequential_cogs", False):
+        from datathon.modeling.forecasters.sequential import SequentialForecaster
+
+        return SequentialForecaster(model_type, **model_cfg)
+
     forecaster_cls = get_forecaster(model_type)
     return forecaster_cls(**model_cfg)
