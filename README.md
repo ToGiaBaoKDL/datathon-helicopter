@@ -3,6 +3,8 @@
 End-to-end analytics and forecasting pipeline.
 **Stack:** uv · dbt + DuckDB · LightGBM · XGBoost · CatBoost · Evidence · MLflow
 
+**Deep dive dashboard**: [https://datathon-helicopter.vercel.app](https://datathon-helicopter.vercel.app)
+
 ---
 
 ## Prerequisites
